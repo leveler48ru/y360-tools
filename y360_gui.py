@@ -14,10 +14,6 @@ API-слой (env, маски, ретраи, мок-данные, эндпоин
 y360_tui.py — оба файла должны лежать рядом. Записи по умолчанию запрещены;
 включаются чекбоксом «Режим записи» и на каждое действие спрашивают
 подтверждение. Значения токенов не показываются никогда — только маска.
-
-ПОРЯДОК шагов склейки — по документации Яндекса и логике SCIM/RFC7644;
-ЖИВЫМ ПРОГОНОМ НЕ ПОДТВЕРЖДЁН. Сначала --mock, потом read-only на своей
-организации, боевые шаги только осознанно.
 """
 import argparse
 import json
@@ -68,7 +64,6 @@ class App:
         self.nb = ttk.Notebook(root)
         self.nb.pack(fill="both", expand=True, padx=6, pady=(6, 0))
         self.tab_users = UsersTab(self)
-        self.tab_merge = MergeTab(self)
         self.tab_dirs = DirsTab(self)
         self.tab_mail = MailTab(self)
         self.tab_sec = SecTab(self)
@@ -76,7 +71,6 @@ class App:
         self.tab_util = UtilTab(self)
         self.build_menu()
         for tab, title in ((self.tab_users, "Пользователи"),
-                           (self.tab_merge, "Склейка учётки"),
                            (self.tab_dirs, "Отделы и группы"),
                            (self.tab_mail, "Почта и домены"),
                            (self.tab_sec, "Безопасность"),
@@ -101,8 +95,6 @@ class App:
                                command=self.mode_changed)
         m_help = tk.Menu(menubar, tearoff=0)
         m_help.add_command(label="О программе", command=self.about)
-        m_help.add_command(label="Памятка: порядок склейки",
-                           command=self.merge_help)
         menubar.add_cascade(label="Файл", menu=m_file)
         menubar.add_cascade(label="Режим", menu=m_mode)
         menubar.add_cascade(label="Справка", menu=m_help)
@@ -135,23 +127,8 @@ class App:
             "%s\n%s\n\nAPI-слой: y360_tui.py (stdlib+urllib)\n"
             "Хосты:\n  v1 %s (deprecated, nickname)\n  v2 %s\n"
             "  SCIM https://{domain_id}.scim-api.passport.yandex.net\n\n"
-            "Токены: только из .env/окружения, на экране — маски.\n"
-            "Порядок шагов склейки по документации, живым прогоном не "
-            "подтверждён." % (APP_TITLE, core.APP, core.HOST_V1, core.HOST_V2))
-
-    def merge_help(self):
-        messagebox.showinfo(
-            "Порядок склейки (критичен)",
-            "0. Остановить службу SCIM-синхронизации (иначе коннектор "
-            "откатит rename)\n1. DELETE дубликата — ДО переименования\n"
-            "2. Новый адрес не должен висеть emails у посторонних\n"
-            "3. SCIM replace userName (RFC7644 PatchOp)\n"
-            "4. SCIM replace массива emails (удалить элемент нечем)\n"
-            "5. v1 PATCH nickname (живёт только в api360)\n"
-            "6. v2 PATCH default_email (+ display_name)\n"
-            "7. POST алиас старого адреса (cloud-api /v1/api360)\n"
-            "8. Включить синхронизацию; аудит service=Synchronization "
-            "должен сойтись на тот же uid")
+            "Токены: только из .env/окружения, на экране — маски."
+            % (APP_TITLE, core.APP, core.HOST_V1, core.HOST_V2))
 
     def reload_env(self):
         path = filedialog.askopenfilename(
@@ -373,208 +350,6 @@ class UsersTab(Tab):
             "/v1/directory/organizations/%s/users/statistics" % core.org(),
             done=lambda d, e: self.put(self.out, d, e),
             what="статистика пользователей")
-
-
-# ================================================================ СКЛЕЙКА
-class MergeTab(Tab):
-    def __init__(self, app):
-        super().__init__(app)
-        top = ttk.LabelFrame(self, text="Склейка учётки (переименование "
-                                        "без потери почты/файлов)")
-        top.pack(fill="x", padx=6, pady=6)
-        grid = ttk.Frame(top)
-        grid.pack(fill="x", padx=6, pady=4)
-        self.old_var = tk.StringVar()
-        self.new_var = tk.StringVar()
-        self.disp_var = tk.StringVar()
-        for row, (label, var, hint) in enumerate((
-                ("старый логин:", self.old_var, "dorohina@romashka.ru"),
-                ("новый логин:", self.new_var, "petrova@romashka.ru"),
-                ("display_name:", self.disp_var, "необязательно"))):
-            ttk.Label(grid, text=label).grid(row=row, column=0, sticky="e",
-                                             padx=(0, 4), pady=2)
-            ent = ttk.Entry(grid, textvariable=var, width=36)
-            ent.grid(row=row, column=1, sticky="w", pady=2)
-            ttk.Label(grid, text="  напр. %s" % hint, foreground="#777"
-                      ).grid(row=row, column=2, sticky="w")
-        btns = ttk.Frame(top)
-        btns.pack(fill="x", padx=6, pady=(0, 6))
-        ttk.Button(btns, text="1. Построить план", command=self.plan
-                   ).pack(side="left")
-        ttk.Button(btns, text="2. Выполнить выбранный шаг",
-                   command=self.run_step).pack(side="left", padx=8)
-        ttk.Label(btns, foreground="#777",
-                  text="шаги выполняются строго по одному, каждый — с "
-                       "подтверждением; нужен «Режим записи»"
-                  ).pack(side="left")
-
-        mid = ttk.Panedwindow(self, orient="vertical")
-        mid.pack(fill="both", expand=True, padx=6, pady=(0, 6))
-        plan_frame = ttk.Frame(mid)
-        mid.add(plan_frame, weight=3)
-        self.steps_list = tk.Listbox(plan_frame, font=("Consolas", 10),
-                                     activestyle="dotbox")
-        psb = ttk.Scrollbar(plan_frame, orient="vertical",
-                            command=self.steps_list.yview)
-        self.steps_list.configure(yscrollcommand=psb.set)
-        self.steps_list.pack(side="left", fill="both", expand=True)
-        psb.pack(side="left", fill="y")
-        self.out = self.output_pane(mid)
-        mid.add(self.out, weight=2)
-        self.steps = []        # [(описание, fn или None)]
-        self.ctx = {}
-
-    # -- анализ (только чтение)
-    def plan(self):
-        old = self.old_var.get().strip().lower()
-        new = self.new_var.get().strip().lower()
-        disp = self.disp_var.get().strip()
-        if not old or not new:
-            messagebox.showwarning("Склейка", "Заполни старый и новый логин")
-            return
-        if old.split("@")[-1] != new.split("@")[-1]:
-            messagebox.showwarning(
-                "Склейка",
-                "Разные домены — это другой сценарий (миграция между "
-                "организациями). Здесь только смена локальной части адреса.")
-            return
-
-        def work():
-            ctx = {"old": old, "new": new, "display": disp,
-                   "old_nick": old.split("@")[0],
-                   "new_nick": new.split("@")[0]}
-            ctx["u_old"] = core.scim_find_user(old)
-            ctx["u_dup"] = core.scim_find_user(new)
-            ctx["clash"] = core.catalog_find_email(new) if ctx["u_dup"] else []
-            stray = []
-            data = core.get("scim", "/v2/Users?startIndex=1&count=100")
-            for user in core.items_of(data, "Resources"):
-                if ctx["u_old"] and user.get("id") == ctx["u_old"]["id"]:
-                    continue
-                if any((e.get("value") or "").lower() == new
-                       for e in user.get("emails", [])):
-                    stray.append(user)
-            ctx["stray"] = stray
-            return ctx
-        run_bg(self.app, work, self._plan_done, "предпроверки склейки")
-
-    def _plan_done(self, ctx, err):
-        if err or not ctx:
-            self.put(self.out, None, err or "пустой ответ")
-            return
-        self.ctx = ctx
-        self.steps = []
-        lines = []
-        u_old, u_dup = ctx["u_old"], ctx["u_dup"]
-        if not u_old:
-            self.put(self.out, None,
-                     "SCIM: аккаунт %s не найден — сверь логин, стоп" % ctx["old"])
-            return
-        add = self._add_step
-        add("0. ВРУЧНУЮ: останови службу SCIM-синхронизации в админке "
-            "(иначе коннектор откатит rename)", None)
-        lines.append("старый аккаунт: uid=%s" % u_old["id"])
-        if u_dup:
-            clash = [core.first(c, "id", "userId", default="?")
-                     for c in ctx["clash"]]
-            lines.append("!! дубликат %s существует: uid=%s; в каталоге "
-                         "адрес отдан: %s" % (ctx["new"], u_dup["id"], clash))
-            if clash:
-                lines.append("!! письма дубликата не «склеиваются»: копируй "
-                             "IMAP или оставь shared-ящиком")
-            add("1. DELETE дубликата SCIM uid=%s (ДО переименования)"
-                % u_dup["id"], lambda: core.api(
-                    "scim", "DELETE", "/v2/Users/%s" % u_dup["id"],
-                    allow=(200, 204, 404)))
-        else:
-            lines.append("дубликата нет — обычный rename, шаг 1 пропускается")
-        if ctx["stray"]:
-            for user in ctx["stray"]:
-                keep = [e for e in user.get("emails", [])
-                        if (e.get("value") or "").lower() != ctx["new"]]
-                lines.append("!! %s висит в emails у постороннего uid=%s"
-                             % (ctx["new"], user["id"]))
-                add("2. Чистка emails у постороннего uid=%s" % user["id"],
-                    lambda u=user["id"], k=keep: core.api(
-                        "scim", "PATCH", "/v2/Users/%s" % u,
-                        core.patch_ops([{"op": "replace", "path": "emails",
-                                         "value": k}])))
-        else:
-            lines.append("2. %s не висит ни на ком постороннем — ок" % ctx["new"])
-        add("3. SCIM replace userName: %s -> %s (uid=%s)"
-            % (ctx["old"], ctx["new"], u_old["id"]),
-            lambda: core.api("scim", "PATCH", "/v2/Users/%s" % u_old["id"],
-                             core.patch_ops([{"op": "replace",
-                                              "path": "userName",
-                                              "value": ctx["new"]}])))
-        add("4. SCIM replace массива emails: %s -> %s"
-            % (ctx["old"], ctx["new"]), self._emails_fn)
-        add("5. v1 PATCH nickname=%s (deprecated api360: ник живёт только "
-            "там)" % ctx["new_nick"],
-            lambda: core.api(
-                "v1", "PATCH",
-                "/directory/v1/org/%s/users/%s" % (core.org(), u_old["id"]),
-                {"nickname": ctx["new_nick"]}))
-        body = {"default_email": ctx["new"]}
-        if ctx["display"]:
-            body["display_name"] = ctx["display"]
-        add("6. v2 PATCH default_email=%s%s"
-            % (ctx["new"],
-               (", display_name=%s" % ctx["display"]) if ctx["display"] else ""),
-            lambda: core.api(
-                "v2", "PATCH",
-                "/v1/directory/organizations/%s/users/%s"
-                % (core.org(), u_old["id"]), dict(body)))
-        add("7. POST алиас %s (старый адрес продолжает принимать почту)"
-            % ctx["old_nick"],
-            lambda: core.api(
-                "v2", "POST",
-                "/v1/api360/directory/org/%s/users/%s/aliases"
-                % (core.org(), u_old["id"]), {"alias": ctx["old_nick"]}))
-        add("8. ВРУЧНУЮ: включи SCIM-синхронизацию; потом проверь во "
-            "вкладке «Аудит» service=Synchronization — коннектор должен "
-            "сойтись на uid=%s, а не создать нового" % u_old["id"], None)
-        self.steps_list.delete(0, "end")
-        for desc, fn in self.steps:
-            mark = "" if fn else "  [вручную]"
-            self.steps_list.insert("end", desc + mark)
-        self.put(self.out, {"предпроверки": lines,
-                            "режим": "ЗАПИСЬ" if self.app.write_mode.get()
-                            else "read-only (шаги 1-7 заблокированы)",
-                            "порядок": "критичен; шаги по одному"})
-
-    def _add_step(self, desc, fn):
-        self.steps.append((desc, fn))
-
-    def _emails_fn(self):
-        uid = self.ctx["u_old"]["id"]
-        me = core.get("scim", "/v2/Users/%s" % uid) or {}
-        emails = [dict(e) for e in me.get("emails", [])]
-        for entry in emails:
-            if (entry.get("value") or "").lower() == self.ctx["old"]:
-                entry["value"], entry["primary"] = self.ctx["new"], True
-        return core.api("scim", "PATCH", "/v2/Users/%s" % uid,
-                        core.patch_ops([{"op": "replace", "path": "emails",
-                                         "value": emails}]))
-
-    def run_step(self):
-        sel = self.steps_list.curselection()
-        if not sel:
-            messagebox.showinfo("Склейка", "Сначала «Построить план», потом "
-                                           "выбери шаг в списке")
-            return
-        idx = sel[0]
-        if idx >= len(self.steps):
-            return
-        desc, fn = self.steps[idx]
-        if fn is None:
-            messagebox.showinfo("Шаг выполняется вручную", desc)
-            return
-        if not self.app.guard_write(desc, lambda: run_bg(
-                self.app, fn,
-                lambda d, e: self.put(self.out, d, e),
-                "шаг %d" % idx)):
-            return
 
 
 # ================================================================ ОТДЕЛЫ/ГРУППЫ
@@ -984,18 +759,15 @@ def selftest_gui():
     # 1. моковые данные пользователей грузятся синхронно (MOCK — сеть молчит)
     users = core.fetch_users_v2()
     ok.append(("fetch_users_v2 mock: %d" % len(users), len(users) >= 4))
-    # 2. план склейки строится и содержит шаги 0..8
-    plan = core.merge_plan("dorohina@romashka.ru", "petrova@romashka.ru")
-    text = "\n".join(plan)
-    ok.append(("merge_plan read-only (нет применения)",
-               "запусти с --write" in text))
-    ok.append(("merge_plan нашёл старый аккаунт", "uid=" in text))
+    # 2. запись заблокирована без --write
+    guard = core.write_guard("самопроверка read-only", lambda: None)
+    ok.append(("read-only guard", "read-only" in guard))
     # 3. маскировка
     ok.append(("mask не печатает токен",
                "test-oauth" not in core.mask(core.ENV["Y360_OAUTH_TOKEN"])))
     # 4. вкладки созданы
     ok.append(("все вкладки на месте",
-               all(t is not None for t in (app.tab_users, app.tab_merge,
+               all(t is not None for t in (app.tab_users,
                                            app.tab_dirs, app.tab_mail,
                                            app.tab_sec, app.tab_audit,
                                            app.tab_util))))

@@ -24,10 +24,6 @@ y360_tui.py — псевдографическая консоль управле
 
 Управление: стрелки/ j k, цифры 1-9 — быстрый выбор, Enter — открыть,
 Backspace или x — назад, q — выход.
-
-ПОРЯДОК Шагов склейки (меню 2) — по документации Яндекса и логике SCIM/RFC7644;
-ЖИВЫМ ПРОГОНОМ НЕ ПОДТВЕРЖДЁН. Сначала --mock, потом dry-просмотр на своей
-организации, боевой прогон только с явным --write и ручным подтверждением.
 """
 import json
 import os
@@ -579,25 +575,7 @@ def scim_by_id():
         show_paged("SCIM %s" % uid, ["ошибка: %s" % err])
 
 
-# ---------------------------------------------------------------- 2. Склейка (визард 0-7)
-def patch_ops(ops):
-    return {"schemas": [PATCH_SCHEMA], "Operations": ops}
-
-
-def scim_find_user(username):
-    data = get("scim", "/v2/Users?startIndex=1&count=100")
-    for user in items_of(data, "Resources"):
-        if (user.get("userName") or "").lower() == username.lower():
-            return user
-    return None
-
-
-def catalog_find_email(email):
-    data = get("v1", "/directory/v1/org/%s/users?email=%s"
-               % (org(), urllib.parse.quote(email)))
-    return items_of(data, "users", "items")
-
-
+# ----------------------------- служебное: обёртка записи (write_guard)
 def write_guard(desc, fn, skip_dry=False):
     """Единая точка записи: без --write показывает только предпросмотр."""
     if not WRITE:
@@ -612,124 +590,10 @@ def write_guard(desc, fn, skip_dry=False):
         return "[ОШИБКА] %s: %s" % (desc, str(err)[:200])
 
 
-def menu_merge():
-    old = ask_line("старый логин (напр. dorohina@romashka.ru):")
-    if not old:
-        return
-    new = ask_line("новый логин (напр. sokolova@romashka.ru):")
-    if not new:
-        return
-    old, new = old.lower().strip(), new.lower().strip()
-    display = ask_line("новый display_name (Enter — не менять):")
-    if old.split("@")[-1] != new.split("@")[-1]:
-        return show_paged("склейка", ["смена домена — другой сценарий;",
-                                      "здесь только локальная часть адреса"])
-    steps = merge_plan(old, new, display)
-    lines = ["РЕЖИМ: %s" % ("БОЕВОЙ (--write)" if WRITE else "ПРЕДПРОСМОТР (read-only)"),
-             "", "Порядок шагов критичен (навык yandex360-api, шаги 0-7):", ""]
-    lines += steps
-    show_paged("склейка %s -> %s" % (old, new), lines)
-
-
-def merge_plan(old, new, display=None):
-    old_nick, new_nick = old.split("@")[0], new.split("@")[0]
-    out = []
-    u_old = u_dup = None
-    try:
-        u_old = scim_find_user(old)
-        u_dup = scim_find_user(new)
-    except ApiError as err:
-        return ["SCIM недоступен: %s" % err,
-                "проверь Y360_SCIM_TOKEN / Y360_SCIM_DOMAIN_ID"]
-    if not u_old:
-        return ["SCIM: аккаунт %s не найден — сверь логин, стоп" % old]
-    out.append("найден старый аккаунт: uid=%s" % u_old["id"])
-    out.append("дубликат %s: %s" % (new, "uid=%s" % u_dup["id"] if u_dup else "нет — обычный rename"))
-    out.append("")
-    out.append("0. УБЕДИСЬ, что служба SCIM-синхронизации ОСТАНОВЛЕНА (в админке).")
-    out.append("   Иначе коннектор переедет обратно на старый адрес.")
-    if u_dup:
-        clash = []
-        try:
-            clash = catalog_find_email(new)
-        except ApiError:
-            pass
-        if clash:
-            out.append("   !! в каталоге %s уже отдан id=%s: если там письма —"
-                       % (new, [first(c, "id", "userId") for c in clash]))
-            out.append("   !! их не «склеить»: копируй IMAP или оставь shared-ящиком")
-        out.append("1. DELETE дубликата SCIM uid=%s — ДО переименования" % u_dup["id"])
-    else:
-        out.append("1. (дубликата нет — шаг пропускается)")
-    out.append("2. Проверить, что %s не висит emails-записью на посторонних" % new)
-    out.append("3. SCIM replace userName uid=%s: %s -> %s" % (u_old["id"], old, new))
-    out.append("4. SCIM replace массива emails: %s -> %s (удалить элемент нечем)" % (old, new))
-    out.append("5. Каталог v1 PATCH nickname=%s (deprecated api360: ник живёт только тут)" % new_nick)
-    out.append("6. Каталог v2 PATCH default_email=%s%s" % (new,
-                 (", display_name=%s" % display) if display else ""))
-    out.append("7. POST алиас %s (cloud-api /v1/api360/.../aliases)" % old_nick)
-    out.append("8. Включить SCIM-синхронизацию; аудит-лог service=Synchronization:")
-    out.append("   коннектор должен сойтись по mail на uid=%s, а не создать нового" % u_old["id"])
-    out.append("")
-    out.append("После боевого прогона: обнови в AD CN, displayName, mail, userPrincipalName")
-    out.append("(ключ синхронизации — почтовый адрес).")
-    if WRITE:
-        out.append("")
-        out.append("--- применение ---")
-        if u_dup:
-            out.append(write_guard("DELETE дубликата SCIM uid=%s" % u_dup["id"],
-                                   lambda: api("scim", "DELETE", "/v2/Users/%s" % u_dup["id"],
-                                               allow=(200, 204, 404))))
-            time.sleep(0 if MOCK else 2)
-        for stray in (get("scim", "/v2/Users?startIndex=1&count=100"),):
-            for user in items_of(stray, "Resources"):
-                if user["id"] == u_old["id"]:
-                    continue
-                if any((e.get("value") or "").lower() == new for e in user.get("emails", [])):
-                    keep = [e for e in user["emails"]
-                            if (e.get("value") or "").lower() != new]
-                    out.append(write_guard("чистка emails у постороннего uid=%s" % user["id"],
-                                           lambda u=user["id"], k=keep: api(
-                                               "scim", "PATCH", "/v2/Users/%s" % u,
-                                               patch_ops([{"op": "replace",
-                                                           "path": "emails",
-                                                           "value": k}]))))
-        out.append(write_guard("replace userName", lambda: api(
-            "scim", "PATCH", "/v2/Users/%s" % u_old["id"],
-            patch_ops([{"op": "replace", "path": "userName", "value": new}]))))
-
-        def fix_emails():
-            me = get("scim", "/v2/Users/%s" % u_old["id"]) or {}
-            emails = [dict(e) for e in me.get("emails", [])]
-            for entry in emails:
-                if (entry.get("value") or "").lower() == old:
-                    entry["value"], entry["primary"] = new, True
-            return api("scim", "PATCH", "/v2/Users/%s" % u_old["id"],
-                       patch_ops([{"op": "replace", "path": "emails",
-                                   "value": emails}]))
-        out.append(write_guard("SCIM emails replace", fix_emails))
-        out.append(write_guard("v1 nickname", lambda: api(
-            "v1", "PATCH", "/directory/v1/org/%s/users/%s" % (org(), u_old["id"]),
-            {"nickname": new_nick})))
-        body = {"default_email": new}
-        if display:
-            body["display_name"] = display
-        out.append(write_guard("v2 default_email/display_name", lambda: api(
-            "v2", "PATCH", "/v1/directory/organizations/%s/users/%s"
-            % (org(), u_old["id"]), body)))
-        out.append(write_guard("POST алиас %s" % old_nick, lambda: api(
-            "v2", "POST", "/v1/api360/directory/org/%s/users/%s/aliases"
-            % (org(), u_old["id"]), {"alias": old_nick})))
-    else:
-        out.append("(для применения шагов 1-7 запусти с --write — каждый шаг"
-                   " спросит подтверждение)")
-    return out
-
-
-# ---------------------------------------------------------------- 3. Отделы и группы
+# ---------------------------------------------------------------- 2. Отделы и группы
 def menu_dirs():
     while True:
-        act = menu("3. Отделы и группы",
+        act = menu("2. Отделы и группы",
                    [("отделы (v2)", lambda: simple_list("v2",
                         "/v1/directory/organizations/%s/departments" % org(),
                         "departments", ("id", "name", "headId"))),
@@ -783,10 +647,10 @@ def group_members():
     show_paged("группа %s" % gid, lines)
 
 
-# ---------------------------------------------------------------- 4. Почта и домены
+# ---------------------------------------------------------------- 3. Почта и домены
 def menu_mail():
     while True:
-        act = menu("4. Почта и домены",
+        act = menu("3. Почта и домены",
                    [("домены организации (v1)", lambda: simple_list("v1",
                         "/directory/v1/org/%s/domains" % org(),
                         "domains", ("id", "verified", "status"))),
@@ -892,10 +756,10 @@ def aliases_menu():
 
 
 
-# ---------------------------------------------------------------- 5. Безопасность
+# ---------------------------------------------------------------- 4. Безопасность
 def menu_sec():
     while True:
-        act = menu("5. Безопасность",
+        act = menu("4. Безопасность",
                    [("2FA: требования к пользователям", lambda: raw_get("v2",
                         "/v1/directory/organizations/%s/settings/2fa" % org(),
                         "2fa settings")),
@@ -965,10 +829,10 @@ def logins_audit():
     show_paged("входы в аккаунты", lines)
 
 
-# ---------------------------------------------------------------- 6. Аудит и статистика
+# ---------------------------------------------------------------- 5. Аудит и статистика
 def menu_audit():
     while True:
-        act = menu("6. Аудит и статистика",
+        act = menu("5. Аудит и статистика",
                    [("лентa событий (v2 auditlog)", audit_events),
                     ("фильтр: только Synchronization", lambda: audit_events("Synchronization")),
                     ("фильтр: Directory", lambda: audit_events("Directory")),
@@ -1007,10 +871,10 @@ def org_stats_view():
         show_paged("статистика", ["ошибка: %s" % err])
 
 
-# ---------------------------------------------------------------- 7. Утилиты / диагностика
+# ---------------------------------------------------------------- 6. Утилиты / диагностика
 def menu_util():
     while True:
-        act = menu("7. Утилиты и диагностика",
+        act = menu("6. Утилиты и диагностика",
                    [("конфигурация (токены замаскированы)", show_config),
                     ("сырой GET по пути из docs", raw_probe),
                     ("последние вызовы (лог сессии)", call_log),
@@ -1134,13 +998,12 @@ def main():
         act = menu("Яндекс 360 — %s%s" % ("MOCK" if MOCK else "ORG %s" % org(),
                                           " | WRITE" if WRITE else ""),
                    [("1. Пользователи и алиасы", menu_users),
-                    ("2. Склейка учётных записей (визард 0-7)", menu_merge),
-                    ("3. Отделы, группы, офисы, комнаты", menu_dirs),
-                    ("4. Почта, домены, DKIM, DNS", menu_mail),
-                    ("5. Безопасность: 2FA, SSO, сессии, входы", menu_sec),
-                    ("6. Аудит-лог и статистика", menu_audit),
-                    ("7. Утилиты и диагностика", menu_util),
-                    ("8. Обзор организации", lambda: show_paged(
+                    ("2. Отделы, группы, офисы, комнаты", menu_dirs),
+                    ("3. Почта, домены, DKIM, DNS", menu_mail),
+                    ("4. Безопасность: 2FA, SSO, сессии, входы", menu_sec),
+                    ("5. Аудит-лог и статистика", menu_audit),
+                    ("6. Утилиты и диагностика", menu_util),
+                    ("7. Обзор организации", lambda: show_paged(
                         "обзор", org_summary()))],
                    "read-only" if not WRITE else "WRITE")
         if act is None:
@@ -1160,14 +1023,8 @@ def selftest_lines():
         out.append("mock v2 card: ok")
         al = get("v2", "/v1/api360/directory/org/X/users/102/aliases")
         out.append("mock aliases: %s" % items_of(al, "aliases"))
-        plan = merge_plan("dorohina@romashka.ru", "sokolova@romashka.ru")
-        joined = "\n".join(str(x) for x in plan)
-        checks = [("шаг 0 stop SCIM", "ОСТАНОВЛЕНА" in joined),
-                  ("шаг nickname v1", "PATCH nickname" in joined or "nickname=" in joined),
-                  ("шаг alias", "алиас" in joined.lower()),
-                  ("read-only guard", "ПРЕДПРОСМОТР" in joined or "--write" in joined)]
-        for name, ok in checks:
-            out.append("%s: %s" % (name, "OK" if ok else "FAIL"))
+        guard = write_guard("самопроверка read-only", lambda: None)
+        out.append("read-only guard: %s" % ("OK" if "read-only" in guard else "FAIL"))
         out.append("mask: %s" % mask("y0_" + "x" * 40 + "abc"))
         out.append("patch schema: %s" % PATCH_SCHEMA)
         out.append("selftest: %d строк, ошибок нет" % len(out))
