@@ -12,7 +12,7 @@ Usage:
 
 The API layer (env, masks, retries, mock data, endpoints) is reused from
 y360_tui.py — both files must sit side by side. Writes are disabled by
-default; enable them with the "Режим записи" (write mode) checkbox — every
+default; enable them with the "Write mode" checkbox — every
 action then asks for confirmation. Token values are never shown, only masks.
 """
 import argparse
@@ -31,11 +31,11 @@ try:
     import tkinter as tk
     from tkinter import ttk, messagebox, filedialog
 except ImportError as exc:
-    sys.exit("нужен tkinter: %s\nWindows: ставь Python с python.org "
-             "(галочка tcl/tk), Linux: apt install python3-tk" % exc)
+    sys.exit("tkinter required: %s\nWindows: install Python from python.org "
+             "(with the tcl/tk option), Linux: apt install python3-tk" % exc)
 
-APP_TITLE = "Яндекс 360 — консоль администратора"
-SERVICES = ["(все)", "Synchronization", "Directory", "Mail", "Disk",
+APP_TITLE = "Yandex 360 — admin console"
+SERVICES = ["(all)", "Synchronization", "Directory", "Mail", "Disk",
             "Portal", "Calendar"]
 
 
@@ -69,11 +69,11 @@ class App:
         self.tab_audit = AuditTab(self)
         self.tab_util = UtilTab(self)
         self.build_menu()
-        for tab, title in ((self.tab_users, "Пользователи"),
-                           (self.tab_dirs, "Отделы и группы"),
-                           (self.tab_mail, "Почта и домены"),
-                           (self.tab_audit, "Аудит"),
-                           (self.tab_util, "Утилиты")):
+        for tab, title in ((self.tab_users, "Users"),
+                           (self.tab_dirs, "Departments and groups"),
+                           (self.tab_mail, "Mail and domains"),
+                           (self.tab_audit, "Audit"),
+                           (self.tab_util, "Utilities")):
             self.nb.add(tab, text=title)
         core.WRITE = False
         self.poll()
@@ -82,20 +82,20 @@ class App:
     def build_menu(self):
         menubar = tk.Menu(self.root)
         m_file = tk.Menu(menubar, tearoff=0)
-        m_file.add_command(label="Перезагрузить .env", command=self.reload_env)
-        m_file.add_command(label="Конфигурация (маски)…",
+        m_file.add_command(label="Reload .env", command=self.reload_env)
+        m_file.add_command(label="Configuration (masks)…",
                            command=self.tab_util.show_config)
         m_file.add_separator()
-        m_file.add_command(label="Выход", command=self.root.destroy)
+        m_file.add_command(label="Exit", command=self.root.destroy)
         m_mode = tk.Menu(menubar, tearoff=0)
-        m_mode.add_checkbutton(label="Режим записи (--write)",
+        m_mode.add_checkbutton(label="Write mode (--write)",
                                variable=self.write_mode,
                                command=self.mode_changed)
         m_help = tk.Menu(menubar, tearoff=0)
-        m_help.add_command(label="О программе", command=self.about)
-        menubar.add_cascade(label="Файл", menu=m_file)
-        menubar.add_cascade(label="Режим", menu=m_mode)
-        menubar.add_cascade(label="Справка", menu=m_help)
+        m_help.add_command(label="About", command=self.about)
+        menubar.add_cascade(label="File", menu=m_file)
+        menubar.add_cascade(label="Mode", menu=m_mode)
+        menubar.add_cascade(label="Help", menu=m_help)
         self.root.config(menu=menubar)
 
     def build_statusbar(self):
@@ -104,7 +104,7 @@ class App:
         self.mode_lbl = ttk.Label(bar, text="READ-ONLY", foreground="#0a7d00")
         self.mode_lbl.pack(side="left")
         ttk.Label(bar, text="  |  org=%s  |  " % (core.org() or "?")).pack(side="left")
-        self.busy_lbl = ttk.Label(bar, text="готов")
+        self.busy_lbl = ttk.Label(bar, text="ready")
         self.busy_lbl.pack(side="left")
         self.status_lbl = ttk.Label(bar, text="", anchor="e")
         self.status_lbl.pack(side="right", fill="x", expand=True)
@@ -112,30 +112,30 @@ class App:
     def mode_changed(self):
         core.WRITE = self.write_mode.get()
         if core.WRITE:
-            self.mode_lbl.config(text="ЗАПИСЬ РАЗРЕШЕНА", foreground="#b00020")
-            self.status("Режим записи включён. Каждое действие спросит "
-                        "подтверждение.")
+            self.mode_lbl.config(text="WRITE ENABLED", foreground="#b00020")
+            self.status("Write mode enabled. Every action will ask "
+                        "for confirmation.")
         else:
             self.mode_lbl.config(text="READ-ONLY", foreground="#0a7d00")
-            self.status("Режим записи выключен.")
+            self.status("Write mode disabled.")
 
     def about(self):
         messagebox.showinfo(
-            "О программе",
-            "%s\n%s\n\nAPI-слой: y360_tui.py (stdlib+urllib)\n"
-            "Хосты:\n  v1 %s (deprecated, nickname)\n  v2 %s\n"
+            "About",
+            "%s\n%s\n\nAPI layer: y360_tui.py (stdlib+urllib)\n"
+            "Hosts:\n  v1 %s (deprecated, nickname)\n  v2 %s\n"
             "  SCIM https://{domain_id}.scim-api.passport.yandex.net\n\n"
-            "Токены: только из .env/окружения, на экране — маски."
+            "Tokens: only from .env/environment; shown as masks."
             % (APP_TITLE, core.APP, core.HOST_V1, core.HOST_V2))
 
     def reload_env(self):
         path = filedialog.askopenfilename(
-            title="Файл .env", filetypes=[("env", ".env*"), ("все", "*.*")])
+            title=".env file", filetypes=[("env", ".env*"), ("all", "*.*")])
         if path and core.load_env_file(path):
-            self.status(".env загружен: %s" % os.path.basename(path))
+            self.status(".env loaded: %s" % os.path.basename(path))
             self.tab_util.show_config()
         elif path:
-            messagebox.showwarning(".env", "Файл не найден/не прочитан")
+            messagebox.showwarning(".env", "File not found/unreadable")
 
     def status(self, text):
         self.status_lbl.config(text=text[:160])
@@ -145,7 +145,7 @@ class App:
              allow=(200, 201, 204), what=None):
         """Non-blocking request; the result arrives via the queue and done(data)."""
         self.busy_count += 1
-        self.busy_lbl.config(text="запрос: %s" % (what or path[:60]))
+        self.busy_lbl.config(text="request: %s" % (what or path[:60]))
 
         def worker():
             try:
@@ -164,9 +164,9 @@ class App:
                 done, out, err, what = self.q.get_nowait()
                 self.busy_count = max(0, self.busy_count - 1)
                 if self.busy_count == 0:
-                    self.busy_lbl.config(text="готов")
+                    self.busy_lbl.config(text="ready")
                 if err:
-                    self.status("%s → ОШИБКА: %s" % (what, err))
+                    self.status("%s → ERROR: %s" % (what, err))
                     if done:
                         done(None, err)
                 else:
@@ -182,12 +182,12 @@ class App:
         if not self.write_mode.get():
             messagebox.showinfo(
                 "Read-only",
-                "Действие заблокировано (режим read-only):\n%s\n\n"
-                "Включи «Режим → Режим записи», если уверен." % desc)
+                "Action blocked (read-only mode):\n%s\n\n"
+                "Enable Mode → Write mode if you are sure." % desc)
             return False
-        if not messagebox.askyesno("Подтверждение записи", desc,
+        if not messagebox.askyesno("Write confirmation", desc,
                                    icon="warning", default="no"):
-            self.status("отменено: %s" % desc)
+            self.status("cancelled: %s" % desc)
             return False
         fn()
         return True
@@ -208,9 +208,9 @@ class Tab(ttk.Frame):
         txt.config(state="normal")
         txt.delete("1.0", "end")
         if err:
-            txt.insert("end", "ОШИБКА: %s\n" % err)
+            txt.insert("end", "ERROR: %s\n" % err)
         elif data is None:
-            txt.insert("end", "(пустой ответ)\n")
+            txt.insert("end", "(empty response)\n")
         else:
             txt.insert("end", jdump(data) + "\n")
         txt.config(state="disabled")
@@ -238,19 +238,19 @@ class UsersTab(Tab):
         super().__init__(app)
         top = ttk.Frame(self)
         top.pack(fill="x", padx=6, pady=6)
-        ttk.Button(top, text="Обновить (v2)", command=self.refresh).pack(side="left")
-        ttk.Label(top, text="  Поиск (ник/почта, v1):").pack(side="left")
+        ttk.Button(top, text="Refresh (v2)", command=self.refresh).pack(side="left")
+        ttk.Label(top, text="  Search (nickname/email, v1):").pack(side="left")
         self.search_var = tk.StringVar()
         ent = ttk.Entry(top, textvariable=self.search_var, width=26)
         ent.pack(side="left")
         ent.bind("<Return>", lambda e: self.search())
-        ttk.Button(top, text="Найти", command=self.search).pack(side="left")
-        ttk.Button(top, text="Карточка v2", command=lambda: self.card("v2")
+        ttk.Button(top, text="Find", command=self.search).pack(side="left")
+        ttk.Button(top, text="Card v2", command=lambda: self.card("v2")
                    ).pack(side="left", padx=(14, 0))
-        ttk.Button(top, text="Карточка SCIM", command=lambda: self.card("scim")
+        ttk.Button(top, text="Card SCIM", command=lambda: self.card("scim")
                    ).pack(side="left")
-        ttk.Button(top, text="Алиасы", command=self.aliases).pack(side="left")
-        ttk.Button(top, text="Статистика", command=self.stats).pack(side="left")
+        ttk.Button(top, text="Aliases", command=self.aliases).pack(side="left")
+        ttk.Button(top, text="Statistics", command=self.stats).pack(side="left")
 
         mid = ttk.Panedwindow(self, orient="vertical")
         mid.pack(fill="both", expand=True, padx=6, pady=(0, 6))
@@ -260,8 +260,8 @@ class UsersTab(Tab):
         self.tree = ttk.Treeview(frame, columns=cols, show="headings",
                                  selectmode="browse")
         for cid, title, w in (("id", "user_id", 160),
-                              ("userName", "логин", 280),
-                              ("displayName", "имя", 240)):
+                              ("userName", "login", 280),
+                              ("displayName", "name", 240)):
             self.tree.heading(cid, text=title)
             self.tree.column(cid, width=w, anchor="w")
         vsb = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
@@ -290,10 +290,10 @@ class UsersTab(Tab):
                     core.first(u, "id", "userId", default="?"),
                     core.first(u, "userName", "login", "email", default=""),
                     core.first(u, "displayName", "name", default="")))
-            self.app.status("пользователей: %d" % len(users))
-            self.put(self.out, {"загружено": len(users),
-                                "подсказка": "двойной клик — карточка v2"})
-        run_bg(self.app, core.fetch_users_v2, done, "список пользователей v2")
+            self.app.status("users: %d" % len(users))
+            self.put(self.out, {"loaded": len(users),
+                                "hint": "double click — v2 card"})
+        run_bg(self.app, core.fetch_users_v2, done, "v2 user list")
 
     def search(self):
         needle = self.search_var.get().strip()
@@ -305,13 +305,13 @@ class UsersTab(Tab):
             core.org(), urllib.parse.urlencode(params))
 
         self.app.call("v1", "GET", path, done=lambda d, e: self.put(
-            self.out, d, e), what="поиск v1 %s" % needle)
+            self.out, d, e), what="search v1 %s" % needle)
 
     def _uid_or_ask(self):
         if self.uid:
             return self.uid
         from tkinter import simpledialog
-        val = simpledialog.askstring("user_id", "Введи user_id:",
+        val = simpledialog.askstring("user_id", "Enter user_id:",
                                      parent=self)
         return str(val).strip() if val else None
 
@@ -324,12 +324,12 @@ class UsersTab(Tab):
             return "\n".join(core.user_card(uid, src=src))
         run_bg(self.app, work,
                lambda d, e: self._put_text(d, e),
-               "карточка %s %s" % (src, uid))
+               "card %s %s" % (src, uid))
 
     def _put_text(self, text, err):
         self.out.config(state="normal")
         self.out.delete("1.0", "end")
-        self.out.insert("end", ("ОШИБКА: %s\n" % err) if err else (text or ""))
+        self.out.insert("end", ("ERROR: %s\n" % err) if err else (text or ""))
         self.out.config(state="disabled")
 
     def aliases(self):
@@ -340,29 +340,29 @@ class UsersTab(Tab):
             "v2", "GET",
             "/v1/api360/directory/org/%s/users/%s/aliases" % (core.org(), uid),
             done=lambda d, e: self.put(self.out, d, e),
-            what="алиасы %s" % uid)
+            what="aliases %s" % uid)
 
     def stats(self):
         self.app.call(
             "v2", "GET",
             "/v1/directory/organizations/%s/users/statistics" % core.org(),
             done=lambda d, e: self.put(self.out, d, e),
-            what="статистика пользователей")
+            what="user statistics")
 
 
 # ================================================================ DEPARTMENTS/GROUPS
 class DirsTab(Tab):
     """Generic tab: endpoint dropdown + button."""
     ENDPOINTS = [
-        ("отделы (v2)", "v2", "/v1/directory/organizations/%s/departments"),
-        ("отделы (v1 api360)", "v1", "/directory/v1/org/%s/departments"),
-        ("группы (v2)", "v2", "/v1/directory/organizations/%s/groups"),
-        ("группы (v1)", "v1", "/directory/v1/org/%s/groups"),
-        ("офисы (v2)", "v2", "/v1/directory/organizations/%s/offices"),
-        ("комнаты (v2)", "v2", "/v1/directory/organizations/%s/rooms"),
-        ("внешние контакты (v1)", "v1",
+        ("departments (v2)", "v2", "/v1/directory/organizations/%s/departments"),
+        ("departments (v1 api360)", "v1", "/directory/v1/org/%s/departments"),
+        ("groups (v2)", "v2", "/v1/directory/organizations/%s/groups"),
+        ("groups (v1)", "v1", "/directory/v1/org/%s/groups"),
+        ("offices (v2)", "v2", "/v1/directory/organizations/%s/offices"),
+        ("rooms (v2)", "v2", "/v1/directory/organizations/%s/rooms"),
+        ("external contacts (v1)", "v1",
          "/directory/v1/org/%s/external_contacts"),
-        ("логотип организации (v2)", "v2",
+        ("organization logo (v2)", "v2",
          "/v1/directory/organizations/%s/logo"),
     ]
 
@@ -374,9 +374,9 @@ class DirsTab(Tab):
                                   values=[e[0] for e in self.ENDPOINTS])
         self.combo.current(0)
         self.combo.pack(side="left")
-        ttk.Button(top, text="Показать", command=self.fetch).pack(side="left",
+        ttk.Button(top, text="Show", command=self.fetch).pack(side="left",
                                                                   padx=6)
-        ttk.Button(top, text="Состав группы (gid)…",
+        ttk.Button(top, text="Group members (gid)…",
                    command=self.members).pack(side="left", padx=(14, 0))
         self.gid_var = tk.StringVar()
         ttk.Entry(top, textvariable=self.gid_var, width=10).pack(side="left",
@@ -394,12 +394,12 @@ class DirsTab(Tab):
     def members(self):
         gid = self.gid_var.get().strip()
         if not gid:
-            messagebox.showinfo("Группа", "Введи group id рядом с кнопкой")
+            messagebox.showinfo("Group", "Enter group id next to the button")
             return
         path = "/directory/v2/org/%s/groups/%s/members" % (core.org(), gid)
         self.app.call("v1", "GET", path,
                       done=lambda d, e: self.put(self.out, d, e),
-                      what="состав группы %s" % gid)
+                      what="group members %s" % gid)
 
 
 # ================================================================ MAIL
@@ -408,19 +408,19 @@ class MailTab(Tab):
         super().__init__(app)
         top = ttk.Frame(self)
         top.pack(fill="x", padx=6, pady=6)
-        for text, cmd in (("домены", self.domains),
+        for text, cmd in (("domains", self.domains),
                           ("DKIM…", self.dkim), ("DNS…", self.dns),
                           ("mail-settings", self.mail_settings),
-                          ("маршруты…", self.routes),
-                          ("правила (v1)", self.routing_rules),
-                          ("антиспам allowlist", self.antispam),
-                          ("shared-ящики", self.shared),
-                          ("делегированные", self.delegated),
-                          ("алиасы (uid)…", self.aliases)):
+                          ("routes…", self.routes),
+                          ("rules (v1)", self.routing_rules),
+                          ("antispam allowlist", self.antispam),
+                          ("shared mailboxes", self.shared),
+                          ("delegated", self.delegated),
+                          ("aliases (uid)…", self.aliases)):
             ttk.Button(top, text=text, command=cmd).pack(side="left", padx=2)
         ask = ttk.Frame(self)
         ask.pack(fill="x", padx=6)
-        ttk.Label(ask, text="аргумент (домен / почта / uid):").pack(side="left")
+        ttk.Label(ask, text="argument (domain / email / uid):").pack(side="left")
         self.arg_var = tk.StringVar()
         ttk.Entry(ask, textvariable=self.arg_var, width=34).pack(side="left",
                                                                  padx=4)
@@ -430,18 +430,18 @@ class MailTab(Tab):
     def _arg(self, hint):
         val = self.arg_var.get().strip()
         if not val:
-            messagebox.showinfo("Нужен аргумент",
-                                "Введи %s в поле «аргумент»" % hint)
+            messagebox.showinfo("Argument required",
+                                "Enter %s in the argument field" % hint)
             return None
         return val
 
     def domains(self):
         self.app.call("v1", "GET", "/directory/v1/org/%s/domains" % core.org(),
                       done=lambda d, e: self.put(self.out, d, e),
-                      what="домены")
+                      what="domains")
 
     def dkim(self):
-        dom = self._arg("домен (romashka.ru)")
+        dom = self._arg("domain (romashka.ru)")
         if dom:
             self.app.call("v1", "GET",
                           "/directory/v1/org/%s/domains/%s/dkim"
@@ -450,7 +450,7 @@ class MailTab(Tab):
                           what="DKIM %s" % dom)
 
     def dns(self):
-        dom = self._arg("домен")
+        dom = self._arg("domain")
         if dom:
             self.app.call("v1", "GET",
                           "/directory/v1/org/%s/domains/%s/dns"
@@ -465,38 +465,38 @@ class MailTab(Tab):
                       what="mail-settings")
 
     def routes(self):
-        email = self._arg("почтовый адрес")
+        email = self._arg("email address")
         if email:
             self.app.call("v2", "POST",
                           "/v1/mail/organizations/%s/routes/search"
                           % core.org(), {"email": email},
                           done=lambda d, e: self.put(self.out, d, e),
-                          what="маршруты %s" % email)
+                          what="routes %s" % email)
 
     def routing_rules(self):
         self.app.call("v1", "GET",
                       "/admin/v1/org/%s/mail/routing/rules" % core.org(),
                       done=lambda d, e: self.put(self.out, d, e),
-                      what="правила маршрутизации")
+                      what="routing rules")
 
     def antispam(self):
         self.app.call("v1", "GET",
                       "/admin/v1/org/%s/mail/antispam/allowlist/ips"
                       % core.org(),
                       done=lambda d, e: self.put(self.out, d, e),
-                      what="антиспам allowlist")
+                      what="antispam allowlist")
 
     def shared(self):
         self.app.call("v1", "GET",
                       "/admin/v1/org/%s/mailboxes/shared" % core.org(),
                       done=lambda d, e: self.put(self.out, d, e),
-                      what="shared-ящики")
+                      what="shared mailboxes")
 
     def delegated(self):
         self.app.call("v1", "GET",
                       "/admin/v1/org/%s/mailboxes/delegated" % core.org(),
                       done=lambda d, e: self.put(self.out, d, e),
-                      what="делегированные")
+                      what="delegated")
 
     def aliases(self):
         uid = self._arg("user_id")
@@ -506,7 +506,7 @@ class MailTab(Tab):
                                                                  uid)
         self.app.call("v2", "GET", base,
                       done=lambda d, e: self.put(self.out, d, e),
-                      what="алиасы %s" % uid)
+                      what="aliases %s" % uid)
 
 
 # ================================================================ AUDIT
@@ -524,18 +524,18 @@ class AuditTab(Tab):
         self.lim_var = tk.StringVar(value="50")
         ttk.Entry(top, textvariable=self.lim_var, width=6).pack(side="left",
                                                                 padx=4)
-        ttk.Button(top, text="Получить события", command=self.fetch).pack(
+        ttk.Button(top, text="Fetch events", command=self.fetch).pack(
             side="left", padx=6)
-        ttk.Button(top, text="Только Synchronization",
+        ttk.Button(top, text="Synchronization only",
                    command=lambda: self.fetch("Synchronization")).pack(
             side="left")
-        ttk.Button(top, text="Статистика организации",
+        ttk.Button(top, text="Organization statistics",
                    command=self.stats).pack(side="left", padx=14)
         cols = ("ts", "service", "actor", "action")
         self.tree = ttk.Treeview(self, columns=cols, show="headings")
-        for cid, title, w in (("ts", "время", 150), ("service", "сервис", 120),
-                              ("actor", "актор", 160),
-                              ("action", "действие/цель", 420)):
+        for cid, title, w in (("ts", "time", 150), ("service", "service", 120),
+                              ("actor", "actor", 160),
+                              ("action", "action/target", 420)):
             self.tree.heading(cid, text=title)
             self.tree.column(cid, width=w, anchor="w")
         vsb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
@@ -549,7 +549,7 @@ class AuditTab(Tab):
     def fetch(self, service=None):
         if service is None:
             sel = self.svc.get()
-            service = None if sel == "(все)" else sel
+            service = None if sel == "(all)" else sel
         params = {"limit": self.lim_var.get().strip() or "50"}
         if service:
             params["service"] = service
@@ -570,24 +570,24 @@ class AuditTab(Tab):
                     str(actor)[:24],
                     (str(core.first(ev, "action", default="")) + " "
                      + str(target))[:110]))
-            self.app.status("аудит: %d событий (service=%s)"
-                            % (len(self.events), service or "все"))
+            self.app.status("audit: %d events (service=%s)"
+                            % (len(self.events), service or "all"))
         self.app.call("v2", "GET", path, done=done,
-                      what="аудит service=%s" % (service or "все"))
+                      what="audit service=%s" % (service or "all"))
 
     def on_dbl(self, _event):
         sel = self.tree.selection()
         if sel:
             idx = self.tree.index(sel[0])
             if idx < len(self.events):
-                messagebox.showinfo("Событие", jdump(self.events[idx]))
+                messagebox.showinfo("Event", jdump(self.events[idx]))
 
     def stats(self):
         self.app.call("v2", "GET",
                       "/v1/directory/organizations/%s/statistics" % core.org(),
                       done=lambda d, e: messagebox.showinfo(
-                          "Статистика", jdump(d) if not e else "ОШИБКА: %s" % e),
-                      what="статистика организации")
+                          "Statistics", jdump(d) if not e else "ERROR: %s" % e),
+                      what="organization statistics")
 
 
 # ================================================================ UTILITIES
@@ -596,13 +596,13 @@ class UtilTab(Tab):
         super().__init__(app)
         top = ttk.Frame(self)
         top.pack(fill="x", padx=6, pady=6)
-        for text, cmd in (("Конфигурация (маски)", self.show_config),
-                          ("Лог вызовов сессии", self.show_log),
-                          ("Обзор организации", self.org_overview)):
+        for text, cmd in (("Configuration (masks)", self.show_config),
+                          ("Session call log", self.show_log),
+                          ("Organization overview", self.org_overview)):
             ttk.Button(top, text=text, command=cmd).pack(side="left", padx=2)
         ask = ttk.Frame(self)
         ask.pack(fill="x", padx=6)
-        ttk.Label(ask, text="raw GET (kind, путь):").pack(side="left")
+        ttk.Label(ask, text="raw GET (kind, path):").pack(side="left")
         self.kind = ttk.Combobox(ask, state="readonly", width=6,
                                  values=("v1", "v2", "scim"))
         self.kind.current(1)
@@ -616,7 +616,7 @@ class UtilTab(Tab):
         self.out.pack(fill="both", expand=True, padx=6, pady=6)
 
     def show_config(self, _=None):
-        lines = ["Конфигурация (значения токенов не показываются):", ""]
+        lines = ["Configuration (token values are not shown):", ""]
         for key in core.REQUIRED + core.OPTIONAL:
             lines.append("  %-22s = %s" % (key, core.mask(core.ENV.get(key,
                                                                         ""))))
@@ -629,7 +629,7 @@ class UtilTab(Tab):
         self._put_lines(lines)
 
     def show_log(self):
-        lines = ["Лог вызовов сессии (%d):" % len(core.LOG), ""]
+        lines = ["Session call log (%d):" % len(core.LOG), ""]
         lines += ["  %s  %s" % row for row in core.LOG[-200:]]
         self._put_lines(lines)
 
@@ -637,7 +637,7 @@ class UtilTab(Tab):
         run_bg(self.app, core.org_summary,
                lambda d, e: self._put_lines((d or "").splitlines())
                if not e else self.put(self.out, None, e),
-               "обзор организации")
+               "organization overview")
 
     def raw_get(self):
         path = self.path_var.get().strip().replace("ORG_ID", core.org() or "")
@@ -672,13 +672,13 @@ def selftest_gui():
     users = core.fetch_users_v2()
     ok.append(("fetch_users_v2 mock: %d" % len(users), len(users) >= 4))
     # 2. writes are blocked without --write
-    guard = core.write_guard("самопроверка read-only", lambda: None)
+    guard = core.write_guard("read-only selftest", lambda: None)
     ok.append(("read-only guard", "read-only" in guard))
     # 3. masking
-    ok.append(("mask не печатает токен",
+    ok.append(("mask does not print the token",
                "test-oauth" not in core.mask(core.ENV["Y360_OAUTH_TOKEN"])))
     # 4. tabs are created
-    ok.append(("все вкладки на месте",
+    ok.append(("all tabs present",
                all(t is not None for t in (app.tab_users,
                                            app.tab_dirs, app.tab_mail,
                                            app.tab_audit,
@@ -688,23 +688,23 @@ def selftest_gui():
     fails = [name for name, good in ok if not good]
     for name, good in ok:
         print("%s %s" % ("ok  " if good else "FAIL", name))
-    print("selftest-gui: %d проверок, ошибок %d" % (len(ok), len(fails)))
+    print("selftest-gui: %d checks, %d failures" % (len(ok), len(fails)))
     return 1 if fails else 0
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=APP_TITLE)
-    parser.add_argument("--env", help="путь к .env (по умолчанию рядом "
-                                      "со скриптом)")
+    parser.add_argument("--env", help="path to .env (default: next to "
+                                      "the script)")
     parser.add_argument("--mock", action="store_true",
-                        help="демо-данные «Ромашки», без сети")
+                        help="demo data of the fictional Romashka, no network")
     parser.add_argument("--write", action="store_true",
-                        help="разрешить записи (каждая — с подтверждением); "
-                             "в GUI включается и тумблером «Режим»")
+                        help="allow writes (each with confirmation); "
+                             "in the GUI also toggled via the Mode menu")
     parser.add_argument("--check", action="store_true",
-                        help="показать подхваченный конфиг (маски) и выйти")
+                        help="print the loaded config (masked) and exit")
     parser.add_argument("--selftest-gui", action="store_true",
-                        help="смоук-тест GUI без показа окна")
+                        help="GUI smoke test without showing a window")
     args = parser.parse_args(argv)
 
     env_path = args.env or os.path.join(
@@ -715,7 +715,7 @@ def main(argv=None):
         core.load_env_file(home_env)
     else:
         if not core.load_env_file(args.env):
-            sys.exit("не удалось прочитать %s" % args.env)
+            sys.exit("failed to read %s" % args.env)
 
     if args.mock:
         core.MOCK = True
@@ -723,8 +723,8 @@ def main(argv=None):
 
     missing = [k for k in core.REQUIRED if not core.ENV.get(k)]
     if missing and not core.MOCK:
-        sys.exit("в .env не заданы: %s\n(пример: y360.env.example рядом "
-                 "со скриптом)" % ", ".join(missing))
+        sys.exit("not set in .env: %s\n(example: y360.env.example next "
+                 "to the script)" % ", ".join(missing))
 
     if args.selftest_gui:
         return selftest_gui()

@@ -43,6 +43,3 @@ TUI controls: arrow keys / `j` `k`, digits 1–9 for quick selection,
 Enter to open, Backspace or `x` to go back, `q` to quit.
 
 Requires Python 3.8+. No third-party dependencies.
-
-Note: the user interface itself (menus, prompts, dialogs) is in Russian;
-this README and all code comments are in English.

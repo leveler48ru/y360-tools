@@ -73,7 +73,7 @@ def load_env_file(path):
 
 def mask(value):
     if not value:
-        return "(не задан)"
+        return "(not set)"
     if len(value) <= 8:
         return value[:1] + "…"
     return value[:3] + "…" + value[-3:]
@@ -203,14 +203,14 @@ def first(dct, *keys, default=""):
 
 # ---------------------------------------------------------------- mock data (canonical fictional "Romashka")
 MOCK_USERS = [
-    {"id": 101, "userName": "ivanovii@romashka.ru", "name": {"last": "Иванов", "first": "Иван"}, "displayName": "Иванов Иван", "defaultEmail": "ivanov@romashka.ru", "nickname": "ivanov", "departmentId": 10},
-    {"id": 102, "userName": "petrova@romashka.ru", "name": {"last": "Петрова", "first": "Анна"}, "displayName": "Петрова Анна", "defaultEmail": "petrova@romashka.ru", "nickname": "petrova", "emails": ["petrova@romashka.ru", "ivanovaim@romashka.ru"]},
-    {"id": 103, "userName": "dorohina@romashka.ru", "displayName": "Дорохина Мария", "defaultEmail": "dorohina@romashka.ru", "nickname": "dorohina"},
-    {"id": 104, "userName": "kim@romashka.ru", "displayName": "Ким Сергей", "defaultEmail": "kim@romashka.ru", "nickname": "kim"},
+    {"id": 101, "userName": "ivanovii@romashka.ru", "name": {"last": "Ivanov", "first": "Ivan"}, "displayName": "Ivanov Ivan", "defaultEmail": "ivanov@romashka.ru", "nickname": "ivanov", "departmentId": 10},
+    {"id": 102, "userName": "petrova@romashka.ru", "name": {"last": "Petrova", "first": "Anna"}, "displayName": "Petrova Anna", "defaultEmail": "petrova@romashka.ru", "nickname": "petrova", "emails": ["petrova@romashka.ru", "ivanovaim@romashka.ru"]},
+    {"id": 103, "userName": "dorohina@romashka.ru", "displayName": "Dorokhina Maria", "defaultEmail": "dorohina@romashka.ru", "nickname": "dorohina"},
+    {"id": 104, "userName": "kim@romashka.ru", "displayName": "Kim Sergey", "defaultEmail": "kim@romashka.ru", "nickname": "kim"},
 ]
-MOCK_DEPTS = [{"id": 10, "name": "Бухгалтерия", "headId": 101},
-              {"id": 11, "name": "Отдел разработки", "headId": 102},
-              {"id": 12, "name": "Кадры", "headId": 103}]
+MOCK_DEPTS = [{"id": 10, "name": "Accounting", "headId": 101},
+              {"id": 11, "name": "Development", "headId": 102},
+              {"id": 12, "name": "HR", "headId": 103}]
 MOCK_GROUPS = [{"id": 501, "name": "all-romashka", "members": [101, 102, 103, 104]},
                {"id": 502, "name": "dev", "members": [102]}]
 MOCK_DOMAINS = [{"id": "romashka.ru", "verified": True, "status": "verified",
@@ -362,25 +362,25 @@ def kv_lines(dct, limit=40):
         else:
             out.append("%s: %s" % (key, val))
         if count >= limit:
-            out.append("… (ещё %d полей)" % (len(dct) - limit))
+            out.append("… (%d more fields)" % (len(dct) - limit))
             break
     return out
 
 
 def confirm(text):
-    """Return True only on explicit y/д. Never called without --write."""
+    """Return True only on explicit y. Never called without --write."""
     if not WRITE:
         return False
-    render("подтверждение", [text, "", "Действительно выполнить запись? (y/N)"],
-           "y — да | любой другой ключ — нет", "")
+    render("confirm", [text, "", "Really perform this write? (y/N)"],
+           "y — yes | any other key — no", "")
     key = read_key()
-    return key in ("y", "Y", "д", "Д")
+    return key in ("y", "Y")
 
 
 def show_paged(title, lines, allow_open=None):
     """Scroll through a result; allow_open is callable(index) to enter a write."""
     idx = 0
-    foot = "стрелки/j k — листать | x/Backspace — назад | q — выход"
+    foot = "arrows/j k — scroll | x/Backspace — back | q — quit"
     while True:
         cols, rows = term_size()
         budget = max(1, rows - 8)
@@ -413,8 +413,8 @@ def ask_line(prompt):
     cols, rows = term_size()
     buf = ""
     while True:
-        render("ввод", [prompt, "", "› " + buf + "█"],
-               "Enter — принять | Backspace — стирать | Esc — отмена", "")
+        render("input", [prompt, "", "› " + buf + "█"],
+               "Enter — accept | Backspace — erase | Esc — cancel", "")
         key = read_key()
         if key == "enter":
             return buf.strip()
@@ -431,14 +431,14 @@ def org_summary():
     lines = []
     try:
         data = get("v2", "/v1/directory/organizations/%s" % org())
-        lines += ["Организация: " + str(first(data, "name", "organizationName", default="?"))]
+        lines += ["Organization: " + str(first(data, "name", "organizationName", default="?"))]
         lines += kv_lines(data or {}, limit=15)
     except ApiError as err:
-        lines.append("ошибка: %s" % err)
+        lines.append("error: %s" % err)
     try:
         st = get("v2", "/v1/directory/organizations/%s/statistics" % org())
         lines.append("")
-        lines.append("Статистика: " + json.dumps(st, ensure_ascii=False)[:400])
+        lines.append("Statistics: " + json.dumps(st, ensure_ascii=False)[:400])
     except ApiError:
         pass
     return lines
@@ -454,27 +454,27 @@ def user_card(uid, src="v2"):
             data = get("v2", "/v1/directory/organizations/%s/users/%s" % (org(), uid))
         lines = kv_lines(data or {}, limit=40)
     except ApiError as err:
-        lines = ["ошибка: %s" % err]
+        lines = ["error: %s" % err]
     try:
         al = get("v2", "/v1/api360/directory/org/%s/users/%s/aliases" % (org(), uid))
         lines.append("")
         vals = items_of(al, "aliases", "items") or []
-        lines.append("Алиасы: " + (", ".join(str(v) for v in vals) if vals
-                                   else "нет"))
+        lines.append("Aliases: " + (", ".join(str(v) for v in vals) if vals
+                                   else "none"))
     except ApiError as err:
-        lines.append("алиасы: недоступны (%s)" % str(err)[:60])
+        lines.append("aliases: unavailable (%s)" % str(err)[:60])
     return lines
 
 
 def menu_users():
     while True:
-        act = menu("1. Пользователи",
-                   [("список (v2 cloud-api)", users_list),
-                    ("найти по нику/почте (v1)", users_search),
-                    ("карточка по user_id", user_by_id),
-                    ("SCIM: список записей passport", scim_list),
-                    ("SCIM: запись по uid", scim_by_id),
-                    ("статистика по пользователям", users_stats)],
+        act = menu("1. Users",
+                   [("list (v2 cloud-api)", users_list),
+                    ("search by nickname/email (v1)", users_search),
+                    ("card by user_id", user_by_id),
+                    ("SCIM: passport records list", scim_list),
+                    ("SCIM: record by uid", scim_by_id),
+                    ("user statistics", users_stats)],
                    "org=%s" % (org() or "?"))
         if act is None:
             return
@@ -498,25 +498,25 @@ def users_list():
     try:
         users = fetch_users_v2()
     except ApiError as err:
-        return show_paged("пользователи", ["ошибка: %s" % err])
+        return show_paged("users", ["error: %s" % err])
     rows = [(u, "%s  %s  id=%s" % (cell(u, "userName", "login", "email").ljust(34),
                                    cell(u, "displayName", "name").ljust(26),
                                    cell(u, "id", "userId"))) for u in users]
     if not rows:
-        return show_paged("пользователи", ["список пуст"])
+        return show_paged("users", ["list is empty"])
 
     def open_(pos):
         if pos >= len(rows):
             return None
         uid = first(rows[pos][0], "id", "userId")
-        show_paged("карточка %s" % uid, user_card(uid))
+        show_paged("card %s" % uid, user_card(uid))
         return None
-    show_paged("пользователи (%d) — Enter: карточка" % len(rows),
+    show_paged("users (%d) — Enter: card" % len(rows),
                [r[1] for r in rows], allow_open=open_)
 
 
 def users_search():
-    needle = ask_line("ник или почта (например ivanovaim):")
+    needle = ask_line("nickname or email (e.g. ivanovaim):")
     if not needle:
         return
     params = {"nickname": needle} if "@" not in needle else {"email": needle}
@@ -525,35 +525,35 @@ def users_search():
     try:
         data = get("v1", path)
     except ApiError as err:
-        return show_paged("поиск v1", ["ошибка: %s" % err])
+        return show_paged("search v1", ["error: %s" % err])
     found = items_of(data, "users", "items")
-    lines = ["найдено: %d" % len(found)]
+    lines = ["found: %d" % len(found)]
     for u in found:
         lines.append("id=%-10s nick=%-20s email=%s" % (
             cell(u, "id", "userId"), cell(u, "nickname"),
             cell(u, "email", "defaultEmail")))
-    show_paged("поиск v1", lines)
+    show_paged("search v1", lines)
 
 
 def user_by_id():
     uid = ask_line("user_id:")
     if uid:
-        show_paged("карточка %s" % uid, user_card(uid.strip()))
+        show_paged("card %s" % uid, user_card(uid.strip()))
 
 
 def users_stats():
     try:
         data = get("v2", "/v1/directory/organizations/%s/users/statistics" % org())
-        show_paged("статистика пользователей", kv_lines(data or {}, 40))
+        show_paged("user statistics", kv_lines(data or {}, 40))
     except ApiError as err:
-        show_paged("статистика пользователей", ["ошибка: %s" % err])
+        show_paged("user statistics", ["error: %s" % err])
 
 
 def scim_list():
     try:
         data = get("scim", "/v2/Users?startIndex=1&count=100")
     except ApiError as err:
-        return show_paged("SCIM Users", ["ошибка: %s" % err])
+        return show_paged("SCIM Users", ["error: %s" % err])
     res = items_of(data, "Resources")
     lines = ["totalResults=%s" % first(data, "totalResults", default="?")]
     for u in res:
@@ -571,48 +571,48 @@ def scim_by_id():
         data = get("scim", "/v2/Users/%s" % uid.strip())
         show_paged("SCIM %s" % uid, kv_lines(data or {}, 40))
     except ApiError as err:
-        show_paged("SCIM %s" % uid, ["ошибка: %s" % err])
+        show_paged("SCIM %s" % uid, ["error: %s" % err])
 
 
 # ----------------------------- internal: write wrapper (write_guard)
 def write_guard(desc, fn, skip_dry=False):
     """Single write entry point: without --write only a preview is shown."""
     if not WRITE:
-        return "[read-only] шаг пропущен: %s (запусти с --write)" % desc
+        return "[read-only] step skipped: %s (run with --write)" % desc
     if not confirm(desc):
-        return "[отменено] " + desc
+        return "[cancelled] " + desc
     time.sleep(0 if MOCK else PAUSE)
     try:
         fn()
         return "[ok] " + desc
     except ApiError as err:
-        return "[ОШИБКА] %s: %s" % (desc, str(err)[:200])
+        return "[ERROR] %s: %s" % (desc, str(err)[:200])
 
 
 # ---------------------------------------------------------------- 2. Departments and groups
 def menu_dirs():
     while True:
-        act = menu("2. Отделы и группы",
-                   [("отделы (v2)", lambda: simple_list("v2",
+        act = menu("2. Departments and groups",
+                   [("departments (v2)", lambda: simple_list("v2",
                         "/v1/directory/organizations/%s/departments" % org(),
                         "departments", ("id", "name", "headId"))),
-                    ("отделы (v1 api360)", lambda: simple_list("v1",
+                    ("departments (v1 api360)", lambda: simple_list("v1",
                         "/directory/v1/org/%s/departments" % org(),
                         "departments", ("id", "name", "headId"))),
-                    ("группы (v2)", lambda: simple_list("v2",
+                    ("groups (v2)", lambda: simple_list("v2",
                         "/v1/directory/organizations/%s/groups" % org(),
                         "groups", ("id", "name", "email"))),
-                    ("группы (v1)", lambda: simple_list("v1",
+                    ("groups (v1)", lambda: simple_list("v1",
                         "/directory/v1/org/%s/groups" % org(),
                         "groups", ("id", "name", "email"))),
-                    ("состав группы", group_members),
-                    ("офисы", lambda: simple_list("v2",
+                    ("group members", group_members),
+                    ("offices", lambda: simple_list("v2",
                         "/v1/directory/organizations/%s/offices" % org(),
                         "offices", ("id", "name", "address"))),
-                    ("комнаты", lambda: simple_list("v2",
+                    ("rooms", lambda: simple_list("v2",
                         "/v1/directory/organizations/%s/rooms" % org(),
                         "rooms", ("id", "name", "capacity"))),
-                    ("внешние контакты (v1)", lambda: simple_list("v1",
+                    ("external contacts (v1)", lambda: simple_list("v1",
                         "/directory/v1/org/%s/external_contacts" % org(),
                         "externalContacts", ("id", "name")))])
         if act is None:
@@ -623,12 +623,12 @@ def simple_list(kind, path, *keys):
     try:
         data = get(kind, path)
     except ApiError as err:
-        return show_paged(path.split("/")[-1], ["ошибка: %s" % err])
+        return show_paged(path.split("/")[-1], ["error: %s" % err])
     rows = items_of(data, *(keys[0], "items", "Resources")) if keys else []
-    lines = ["%s: %d записей" % (keys[0], len(rows))]
+    lines = ["%s: %d records" % (keys[0], len(rows))]
     for row in rows:
         lines.append("  ".join(cell(row, k) for k in keys[1]))
-    show_paged(keys[0], lines or ["пусто"])
+    show_paged(keys[0], lines or ["empty"])
 
 
 def group_members():
@@ -638,63 +638,63 @@ def group_members():
     try:
         data = get("v1", "/directory/v2/org/%s/groups/%s/members" % (org(), gid.strip()))
     except ApiError as err:
-        return show_paged("группа %s" % gid, ["ошибка: %s" % err])
+        return show_paged("group %s" % gid, ["error: %s" % err])
     rows = items_of(data, "members", "items")
-    lines = ["участников: %d" % len(rows)]
+    lines = ["members: %d" % len(rows)]
     for m in rows:
         lines.append("%-12s %s" % (cell(m, "id", "userId"), cell(m, "name", "displayName", "type")))
-    show_paged("группа %s" % gid, lines)
+    show_paged("group %s" % gid, lines)
 
 
 # ---------------------------------------------------------------- 3. Mail and domains
 def menu_mail():
     while True:
-        act = menu("3. Почта и домены",
-                   [("домены организации (v1)", lambda: simple_list("v1",
+        act = menu("3. Mail and domains",
+                   [("organization domains (v1)", lambda: simple_list("v1",
                         "/directory/v1/org/%s/domains" % org(),
                         "domains", ("id", "verified", "status"))),
-                    ("DKIM по домену", domain_dkim),
-                    ("DNS-записи домена", domain_dns),
-                    ("настройки почты (v2)", lambda: simple_list("v2",
+                    ("DKIM for domain", domain_dkim),
+                    ("domain DNS records", domain_dns),
+                    ("mail settings (v2)", lambda: simple_list("v2",
                         "/v1/admin/org/%s/mail-settings" % org(),
                         "mail-settings", ())),
-                    ("маршрутизация: поиск правил (v2)", mail_routes),
-                    ("правила маршрутизации (v1)", lambda: simple_list("v1",
+                    ("routing: rule search (v2)", mail_routes),
+                    ("routing rules (v1)", lambda: simple_list("v1",
                         "/admin/v1/org/%s/mail/routing/rules" % org(),
                         "rules", ("id", "name", "enabled"))),
-                    ("антиспам: allowlist IP (v1)", antispam_ips),
-                    ("shared-ящики (v1)", lambda: simple_list("v1",
+                    ("antispam: IP allowlist (v1)", antispam_ips),
+                    ("shared mailboxes (v1)", lambda: simple_list("v1",
                         "/admin/v1/org/%s/mailboxes/shared" % org(),
                         "mailboxes", ("id", "email", "name"))),
-                    ("делегированные (v1)", lambda: simple_list("v1",
+                    ("delegated (v1)", lambda: simple_list("v1",
                         "/admin/v1/org/%s/mailboxes/delegated" % org(),
                         "mailboxes", ("id", "email"))),
-                    ("алиасы пользователя", aliases_menu)])
+                    ("user aliases", aliases_menu)])
         if act is None:
             return
 
 
 def domain_dkim():
-    dom = ask_line("домен (romashka.ru):")
+    dom = ask_line("domain (romashka.ru):")
     if not dom:
         return
     try:
         data = get("v1", "/directory/v1/org/%s/domains/%s/dkim" % (org(), dom.strip()))
         show_paged("DKIM %s" % dom, kv_lines(data or {}, 30))
     except ApiError as err:
-        show_paged("DKIM %s" % dom, ["ошибка: %s" % err])
+        show_paged("DKIM %s" % dom, ["error: %s" % err])
 
 
 def domain_dns():
-    dom = ask_line("домен:")
+    dom = ask_line("domain:")
     if not dom:
         return
     try:
         data = get("v1", "/directory/v1/org/%s/domains/%s/dns" % (org(), dom.strip()))
     except ApiError as err:
-        return show_paged("DNS %s" % dom, ["ошибка: %s" % err])
+        return show_paged("DNS %s" % dom, ["error: %s" % err])
     rows = items_of(data, "records", "dns", "items")
-    lines = ["записей: %d" % len(rows)]
+    lines = ["records: %d" % len(rows)]
     for r in rows:
         lines.append("%-8s %-28s %s" % (cell(r, "recordType", "type"),
                                         cell(r, "name")[:28], cell(r, "value")[:40]))
@@ -702,23 +702,23 @@ def domain_dns():
 
 
 def mail_routes():
-    email = ask_line("почтовый адрес для поиска маршрутов:")
+    email = ask_line("email address to search routes for:")
     if not email:
         return
     try:
         data = api("v2", "POST", "/v1/mail/organizations/%s/routes/search" % org(),
                    {"email": email.strip()})
-        show_paged("маршруты %s" % email, kv_lines(data or {}, 30))
+        show_paged("routes %s" % email, kv_lines(data or {}, 30))
     except ApiError as err:
-        show_paged("маршруты", ["ошибка: %s" % err])
+        show_paged("routes", ["error: %s" % err])
 
 
 def antispam_ips():
     try:
         data = get("v1", "/admin/v1/org/%s/mail/antispam/allowlist/ips" % org())
-        show_paged("антиспам allowlist", kv_lines(data or {}, 40))
+        show_paged("antispam allowlist", kv_lines(data or {}, 40))
     except ApiError as err:
-        show_paged("антиспам allowlist", ["ошибка: %s" % err])
+        show_paged("antispam allowlist", ["error: %s" % err])
 
 
 def aliases_menu():
@@ -730,27 +730,27 @@ def aliases_menu():
     try:
         data = get("v2", base)
     except ApiError as err:
-        return show_paged("алиасы %s" % uid, ["ошибка: %s" % err])
+        return show_paged("aliases %s" % uid, ["error: %s" % err])
     rows = items_of(data, "aliases", "items")
-    lines = ["алиасы user_id=%s: %d" % (uid, len(rows))] + [str(r) for r in rows]
+    lines = ["aliases user_id=%s: %d" % (uid, len(rows))] + [str(r) for r in rows]
     lines.append("")
-    lines.append("Дальше: a — добавить алиас | d — удалить (только с --write)")
-    show_paged("алиасы %s" % uid, lines)
-    act = ask_line("действие (a/d/Enter — назад):")
+    lines.append("Next: a — add alias | d — delete (only with --write)")
+    show_paged("aliases %s" % uid, lines)
+    act = ask_line("action (a/d/Enter — back):")
     if act not in ("a", "d"):
         return
-    alias = ask_line("алиас (локальная часть, без @домен):")
+    alias = ask_line("alias (local part, without @domain):")
     if not alias:
         return
     base = "/v1/api360/directory/org/%s/users/%s/aliases" % (org(), uid)
     if act == "a":
-        msg = write_guard("POST алиас %s" % alias, lambda: api(
+        msg = write_guard("POST alias %s" % alias, lambda: api(
             "v2", "POST", base, {"alias": alias.strip()}))
     else:
-        msg = write_guard("DELETE алиас %s" % alias, lambda: api(
+        msg = write_guard("DELETE alias %s" % alias, lambda: api(
             "v2", "DELETE", base + "/" + urllib.parse.quote(alias.strip()),
             allow=(200, 204)))
-    show_paged("алиасы", [msg])
+    show_paged("aliases", [msg])
 
 
 
@@ -758,12 +758,12 @@ def aliases_menu():
 # ---------------------------------------------------------------- 4. Audit and statistics
 def menu_audit():
     while True:
-        act = menu("4. Аудит и статистика",
-                   [("лентa событий (v2 auditlog)", audit_events),
-                    ("фильтр: только Synchronization", lambda: audit_events("Synchronization")),
-                    ("фильтр: Directory", lambda: audit_events("Directory")),
-                    ("фильтр: Mail", lambda: audit_events("Mail")),
-                    ("статистика организации", org_stats_view)])
+        act = menu("4. Audit and statistics",
+                   [("event feed (v2 auditlog)", audit_events),
+                    ("filter: Synchronization only", lambda: audit_events("Synchronization")),
+                    ("filter: Directory", lambda: audit_events("Directory")),
+                    ("filter: Mail", lambda: audit_events("Mail")),
+                    ("organization statistics", org_stats_view)])
         if act is None:
             return
 
@@ -776,9 +776,9 @@ def audit_events(service=None):
         data = get("v2", "/v1/auditlog/organizations/%s/events?%s"
                    % (org(), urllib.parse.urlencode(params)))
     except ApiError as err:
-        return show_paged("аудит", ["ошибка: %s" % err])
+        return show_paged("audit", ["error: %s" % err])
     rows = items_of(data, "events", "items")
-    lines = ["событий: %d (service=%s)" % (len(rows), service or "все")]
+    lines = ["events: %d (service=%s)" % (len(rows), service or "all")]
     for e in rows:
         actor = first(e, "actor.user", "actor.source", default="?")
         target = first(e, "target.user", "target.group", "target.domain", default="")
@@ -786,54 +786,54 @@ def audit_events(service=None):
                                             cell(e, "service")[:16],
                                             str(actor)[:18],
                                             (cell(e, "action") + " " + target)[:60]))
-    show_paged("аудит событий", lines)
+    show_paged("audit events", lines)
 
 
 def org_stats_view():
     try:
         data = get("v2", "/v1/directory/organizations/%s/statistics" % org())
-        show_paged("статистика", kv_lines(data or {}, 40))
+        show_paged("statistics", kv_lines(data or {}, 40))
     except ApiError as err:
-        show_paged("статистика", ["ошибка: %s" % err])
+        show_paged("statistics", ["error: %s" % err])
 
 
 # ---------------------------------------------------------------- 5. Utilities / diagnostics
 def menu_util():
     while True:
-        act = menu("5. Утилиты и диагностика",
-                   [("конфигурация (токены замаскированы)", show_config),
-                    ("сырой GET по пути из docs", raw_probe),
-                    ("последние вызовы (лог сессии)", call_log),
-                    ("проверка доступности хостов", probe_hosts),
-                    ("самопроверка моков (selftest)", lambda: (
+        act = menu("5. Utilities and diagnostics",
+                   [("configuration (tokens masked)", show_config),
+                    ("raw GET by path from docs", raw_probe),
+                    ("recent calls (session log)", call_log),
+                    ("host availability check", probe_hosts),
+                    ("mock selftest", lambda: (
                         show_paged("selftest", selftest_lines())))])
         if act is None:
             return
 
 
 def show_config():
-    lines = ["ORG_ID: %s" % (org() or "(не задан)"),
-             "SCIM domain_id: %s" % (ENV["Y360_SCIM_DOMAIN_ID"] or "(не задан)"),
-             "токен v1/v2 (OAuth): %s" % mask(ENV["Y360_OAUTH_TOKEN"]),
-             "токен v1 отдельный: %s" % mask(ENV.get("Y360_V1_TOKEN", "")),
-             "токен v2 отдельный: %s" % mask(ENV.get("Y360_V2_TOKEN", "")),
-             "токен SCIM (y0_): %s" % mask(ENV["Y360_SCIM_TOKEN"]),
-             "", "хосты:", HOST_V1, HOST_V2,
+    lines = ["ORG_ID: %s" % (org() or "(not set)"),
+             "SCIM domain_id: %s" % (ENV["Y360_SCIM_DOMAIN_ID"] or "(not set)"),
+             "v1/v2 token (OAuth): %s" % mask(ENV["Y360_OAUTH_TOKEN"]),
+             "separate v1 token: %s" % mask(ENV.get("Y360_V1_TOKEN", "")),
+             "separate v2 token: %s" % mask(ENV.get("Y360_V2_TOKEN", "")),
+             "SCIM token (y0_): %s" % mask(ENV["Y360_SCIM_TOKEN"]),
+             "", "hosts:", HOST_V1, HOST_V2,
              "https://{domain_id}.scim-api.passport.yandex.net",
-             "", "режим: %s | mock: %s" % ("WRITE" if WRITE else "read-only",
-                                            "да" if MOCK else "нет")]
+             "", "mode: %s | mock: %s" % ("WRITE" if WRITE else "read-only",
+                                            "yes" if MOCK else "no")]
     missing = [k for k in REQUIRED if not ENV.get(k)]
     if missing:
-        lines += ["", "НЕ задано: " + ", ".join(missing)]
-    show_paged("конфигурация", lines)
+        lines += ["", "NOT set: " + ", ".join(missing)]
+    show_paged("configuration", lines)
 
 
 def raw_probe():
-    path = ask_line("путь (например /v1/directory/organizations/{org}/users?limit=10):")
+    path = ask_line("path (e.g. /v1/directory/organizations/{org}/users?limit=10):")
     if not path:
         return
     path = path.replace("{org}", str(org()))
-    kind = ask_line("хост: v1 / v2 / scim:")
+    kind = ask_line("host: v1 / v2 / scim:")
     if kind not in ("v1", "v2", "scim"):
         return
     try:
@@ -841,13 +841,13 @@ def raw_probe():
         text = json.dumps(data, ensure_ascii=False, indent=1)
         show_paged("probe %s %s" % (kind, path[:40]), text.splitlines())
     except ApiError as err:
-        show_paged("probe", ["ошибка: %s" % err])
+        show_paged("probe", ["error: %s" % err])
 
 
 def call_log():
-    lines = ["вызовов за сессию: %d" % len(LOG)]
+    lines = ["calls this session: %d" % len(LOG)]
     lines += ["%s  %s" % (ts, msg) for ts, msg in LOG[-200:]]
-    show_paged("лог вызовов", lines)
+    show_paged("call log", lines)
 
 
 def probe_hosts():
@@ -862,10 +862,10 @@ def probe_hosts():
             with urllib.request.urlopen(req, timeout=8) as r:
                 lines.append("%s: HTTP %s" % (name, r.status))
         except urllib.error.HTTPError as err:
-            lines.append("%s: HTTP %s (хост отвечает)" % (name, err.code))
+            lines.append("%s: HTTP %s (host responds)" % (name, err.code))
         except Exception as exc:
             lines.append("%s: %s" % (name, str(exc)[:80]))
-    show_paged("доступность", lines)
+    show_paged("availability", lines)
 
 
 # ---------------------------------------------------------------- main / loop
@@ -881,7 +881,7 @@ def menu(title, entries, state=""):
             num = str(i + 1) if i < 9 else " "
             lines.append("%s [%s] %s" % (mark, num, label))
         render(title, lines,
-               "↑↓/j k — выбор | цифры 1-9 | Enter — открыть | q — назад", state)
+               "↑↓/j k — select | digits 1-9 | Enter — open | q — back", state)
         key = read_key()
         if key in ("up", "k"):
             idx = (idx - 1) % len(entries)
@@ -918,18 +918,18 @@ def main():
     if not MOCK:
         missing = [k for k in REQUIRED if not ENV.get(k)]
         if missing:
-            sys.exit("не заданы переменные (положи .env рядом со скриптом): "
+            sys.exit("variables not set (put .env next to the script): "
                      + ", ".join(missing))
     while True:
-        act = menu("Яндекс 360 — %s%s" % ("MOCK" if MOCK else "ORG %s" % org(),
+        act = menu("Yandex 360 — %s%s" % ("MOCK" if MOCK else "ORG %s" % org(),
                                           " | WRITE" if WRITE else ""),
-                   [("1. Пользователи и алиасы", menu_users),
-                    ("2. Отделы, группы, офисы, комнаты", menu_dirs),
-                    ("3. Почта, домены, DKIM, DNS", menu_mail),
-                    ("4. Аудит-лог и статистика", menu_audit),
-                    ("5. Утилиты и диагностика", menu_util),
-                    ("6. Обзор организации", lambda: show_paged(
-                        "обзор", org_summary()))],
+                   [("1. Users and aliases", menu_users),
+                    ("2. Departments, groups, offices, rooms", menu_dirs),
+                    ("3. Mail, domains, DKIM, DNS", menu_mail),
+                    ("4. Audit log and statistics", menu_audit),
+                    ("5. Utilities and diagnostics", menu_util),
+                    ("6. Organization overview", lambda: show_paged(
+                        "overview", org_summary()))],
                    "read-only" if not WRITE else "WRITE")
         if act is None:
             break
@@ -948,11 +948,11 @@ def selftest_lines():
         out.append("mock v2 card: ok")
         al = get("v2", "/v1/api360/directory/org/X/users/102/aliases")
         out.append("mock aliases: %s" % items_of(al, "aliases"))
-        guard = write_guard("самопроверка read-only", lambda: None)
+        guard = write_guard("read-only selftest", lambda: None)
         out.append("read-only guard: %s" % ("OK" if "read-only" in guard else "FAIL"))
         out.append("mask: %s" % mask("y0_" + "x" * 40 + "abc"))
         out.append("patch schema: %s" % PATCH_SCHEMA)
-        out.append("selftest: %d строк, ошибок нет" % len(out))
+        out.append("selftest: %d lines, no errors" % len(out))
     except Exception as exc:
         out.append("FAIL selftest exception: %r" % exc)
     finally:
