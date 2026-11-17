@@ -227,9 +227,8 @@ MOCK_AUDIT = [
      "action": "change_mail_routing", "actor": {"user": "admin@romashka.ru"},
      "target": {"domain": "romashka.ru"}},
 ]
-MOCK_SETTINGS = {"sso": {"enabled": False}, "2fa": {"allowed": True},
-                 "oauth_access_restriction": {"mode": "disabled"},
-                 "mail-settings": {"domain": "romashka.ru", "antispam_level": "basic"}}
+MOCK_SETTINGS = {"mail-settings": {"domain": "romashka.ru",
+                                   "antispam_level": "basic"}}
 
 
 def mock_response(kind, method, path, body):
@@ -262,7 +261,7 @@ def mock_response(kind, method, path, body):
         return {"events": MOCK_AUDIT}
     if "statistics" in p:
         return {"userCounter": len(MOCK_USERS), "mailAliasCounter": sum(len(v) for v in MOCK_ALIASES.values())}
-    if "2fa" in p or "sso" in p or "restriction" in p or "mail-settings" in p:
+    if "mail-settings" in p:
         return MOCK_SETTINGS if method == "GET" else {"ok": True, "echo": body}
     if "/users" in p and "statistics" not in p:
         if method != "GET":
@@ -756,83 +755,10 @@ def aliases_menu():
 
 
 
-# ---------------------------------------------------------------- 4. Безопасность
-def menu_sec():
-    while True:
-        act = menu("4. Безопасность",
-                   [("2FA: требования к пользователям", lambda: raw_get("v2",
-                        "/v1/directory/organizations/%s/settings/2fa" % org(),
-                        "2fa settings")),
-                    ("2FA: пользователей без 2FA (v1)", lambda: simple_list("v1",
-                        "/security/v1/org/%s/twofa/required" % org(),
-                        "users", ("id", "nick", "email"))),
-                    ("SSO (v2)", lambda: raw_get("v2",
-                        "/v1/directory/organizations/%s/settings/sso" % org(),
-                        "SSO")),
-                    ("запрет доступа по OAuth (v2)", lambda: raw_get("v2",
-                        "/v1/directory/organizations/%s/settings/oauth_access_restriction"
-                        % org(), "OAuth restriction")),
-                    ("сессии домена (v1)", sessions_domain),
-                    ("парольные политики домена (v1)", lambda: simple_list("v1",
-                        "/security/v1/org/%s/passwords" % org(),
-                        "policies", ("id", "name"))),
-                    ("сервисные приложения (v1)", lambda: simple_list("v1",
-                        "/security/v1/org/%s/service_applications" % org(),
-                        "serviceUsers", ("id", "name", "role"))),
-                    ("аудит: входы в аккаунты (v1)", logins_audit)])
-        if act is None:
-            return
-
-
-def raw_get(kind, path, title):
-    try:
-        data = get(kind, path)
-        show_paged(title, kv_lines(data if isinstance(data, dict)
-                                   else {"value": data}, 40))
-    except ApiError as err:
-        show_paged(title, ["ошибка: %s" % err])
-
-
-def sessions_domain():
-    dom = ask_line("домен:")
-    if not dom:
-        return
-    try:
-        data = get("v1", "/security/v1/org/%s/domain/sessions?domain=%s"
-                   % (org(), urllib.parse.quote(dom.strip())))
-    except ApiError as err:
-        return show_paged("сессии", ["ошибка: %s" % err])
-    rows = items_of(data, "sessions", "items")
-    lines = ["активных сессий: %d" % len(rows)]
-    for s in rows[:200]:
-        lines.append("%-24s %s" % (cell(s, "login", "nick")[:24],
-                                   cell(s, "lastActivity", "ip")))
-    show_paged("сессии %s" % dom, lines)
-
-
-def logins_audit():
-    nick = ask_line("логин (или пусто — все за сутки):")
-    params = {"limit": "50"}
-    if nick:
-        params["nick"] = nick.strip()
-    try:
-        data = get("v1", "/security/v1/org/%s/logins?%s"
-                   % (org(), urllib.parse.urlencode(params)))
-    except ApiError as err:
-        return show_paged("входы", ["ошибка: %s" % err])
-    rows = items_of(data, "logins", "items")
-    lines = ["записей: %d" % len(rows)]
-    for r in rows:
-        lines.append("%s  %-20s %s" % (cell(r, "timestamp", "time")[:19],
-                                       cell(r, "nick", "login")[:20],
-                                       cell(r, "ip", "address", "success")))
-    show_paged("входы в аккаунты", lines)
-
-
-# ---------------------------------------------------------------- 5. Аудит и статистика
+# ---------------------------------------------------------------- 4. Аудит и статистика
 def menu_audit():
     while True:
-        act = menu("5. Аудит и статистика",
+        act = menu("4. Аудит и статистика",
                    [("лентa событий (v2 auditlog)", audit_events),
                     ("фильтр: только Synchronization", lambda: audit_events("Synchronization")),
                     ("фильтр: Directory", lambda: audit_events("Directory")),
@@ -871,10 +797,10 @@ def org_stats_view():
         show_paged("статистика", ["ошибка: %s" % err])
 
 
-# ---------------------------------------------------------------- 6. Утилиты / диагностика
+# ---------------------------------------------------------------- 5. Утилиты / диагностика
 def menu_util():
     while True:
-        act = menu("6. Утилиты и диагностика",
+        act = menu("5. Утилиты и диагностика",
                    [("конфигурация (токены замаскированы)", show_config),
                     ("сырой GET по пути из docs", raw_probe),
                     ("последние вызовы (лог сессии)", call_log),
@@ -1000,10 +926,9 @@ def main():
                    [("1. Пользователи и алиасы", menu_users),
                     ("2. Отделы, группы, офисы, комнаты", menu_dirs),
                     ("3. Почта, домены, DKIM, DNS", menu_mail),
-                    ("4. Безопасность: 2FA, SSO, сессии, входы", menu_sec),
-                    ("5. Аудит-лог и статистика", menu_audit),
-                    ("6. Утилиты и диагностика", menu_util),
-                    ("7. Обзор организации", lambda: show_paged(
+                    ("4. Аудит-лог и статистика", menu_audit),
+                    ("5. Утилиты и диагностика", menu_util),
+                    ("6. Обзор организации", lambda: show_paged(
                         "обзор", org_summary()))],
                    "read-only" if not WRITE else "WRITE")
         if act is None:

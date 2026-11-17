@@ -36,7 +36,7 @@ except ImportError as exc:
 
 APP_TITLE = "Яндекс 360 — консоль администратора"
 SERVICES = ["(все)", "Synchronization", "Directory", "Mail", "Disk",
-            "Security", "SSO", "Portal", "Calendar"]
+            "Portal", "Calendar"]
 
 
 # ---------------------------------------------------------------- утилиты
@@ -66,14 +66,12 @@ class App:
         self.tab_users = UsersTab(self)
         self.tab_dirs = DirsTab(self)
         self.tab_mail = MailTab(self)
-        self.tab_sec = SecTab(self)
         self.tab_audit = AuditTab(self)
         self.tab_util = UtilTab(self)
         self.build_menu()
         for tab, title in ((self.tab_users, "Пользователи"),
                            (self.tab_dirs, "Отделы и группы"),
                            (self.tab_mail, "Почта и домены"),
-                           (self.tab_sec, "Безопасность"),
                            (self.tab_audit, "Аудит"),
                            (self.tab_util, "Утилиты")):
             self.nb.add(tab, text=title)
@@ -511,92 +509,6 @@ class MailTab(Tab):
                       what="алиасы %s" % uid)
 
 
-# ================================================================ БЕЗОПАСНОСТЬ
-class SecTab(Tab):
-    def __init__(self, app):
-        super().__init__(app)
-        top = ttk.Frame(self)
-        top.pack(fill="x", padx=6, pady=6)
-        for text, cmd in (("2FA настройки", self.two_fa),
-                          ("без 2FA (список)", self.no_2fa),
-                          ("SSO", self.sso), ("OAuth-restriction", self.oauth),
-                          ("сессии домена…", self.sessions),
-                          ("парольные политики", self.passwords),
-                          ("сервисные приложения", self.service_apps),
-                          ("журнал входов…", self.logins)):
-            ttk.Button(top, text=text, command=cmd).pack(side="left", padx=2)
-        ask = ttk.Frame(self)
-        ask.pack(fill="x", padx=6)
-        ttk.Label(ask, text="аргумент (домен / ник, пусто=все):").pack(
-            side="left")
-        self.arg_var = tk.StringVar()
-        ttk.Entry(ask, textvariable=self.arg_var, width=30).pack(side="left",
-                                                                 padx=4)
-        self.out = self.output_pane(self, height=30)
-        self.out.pack(fill="both", expand=True, padx=6, pady=6)
-
-    def two_fa(self):
-        self.app.call("v2", "GET",
-                      "/v1/directory/organizations/%s/settings/2fa"
-                      % core.org(),
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="2FA настройки")
-
-    def no_2fa(self):
-        self.app.call("v1", "GET",
-                      "/security/v1/org/%s/twofa/required" % core.org(),
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="пользователи без 2FA")
-
-    def sso(self):
-        self.app.call("v2", "GET",
-                      "/v1/directory/organizations/%s/settings/sso"
-                      % core.org(),
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="SSO")
-
-    def oauth(self):
-        self.app.call("v2", "GET",
-                      "/v1/directory/organizations/%s/settings/"
-                      "oauth_access_restriction" % core.org(),
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="OAuth restriction")
-
-    def sessions(self):
-        dom = self.arg_var.get().strip()
-        if not dom:
-            messagebox.showinfo("Сессии", "Введи домен в поле аргумента")
-            return
-        path = "/security/v1/org/%s/domain/sessions?domain=%s" % (
-            core.org(), urllib.parse.quote(dom))
-        self.app.call("v1", "GET", path,
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="сессии %s" % dom)
-
-    def passwords(self):
-        self.app.call("v1", "GET",
-                      "/security/v1/org/%s/passwords" % core.org(),
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="парольные политики")
-
-    def service_apps(self):
-        self.app.call("v1", "GET",
-                      "/security/v1/org/%s/service_applications" % core.org(),
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="сервисные приложения")
-
-    def logins(self):
-        nick = self.arg_var.get().strip()
-        params = {"limit": "50"}
-        if nick:
-            params["nick"] = nick
-        path = "/security/v1/org/%s/logins?%s" % (
-            core.org(), urllib.parse.urlencode(params))
-        self.app.call("v1", "GET", path,
-                      done=lambda d, e: self.put(self.out, d, e),
-                      what="журнал входов")
-
-
 # ================================================================ АУДИТ
 class AuditTab(Tab):
     def __init__(self, app):
@@ -769,7 +681,7 @@ def selftest_gui():
     ok.append(("все вкладки на месте",
                all(t is not None for t in (app.tab_users,
                                            app.tab_dirs, app.tab_mail,
-                                           app.tab_sec, app.tab_audit,
+                                           app.tab_audit,
                                            app.tab_util))))
     root.update_idletasks()
     root.destroy()
