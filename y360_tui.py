@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 r"""
-y360_tui.py — псевдографическая консоль управления организацией Яндекс 360.
+y360_tui.py — text-mode console for managing a Yandex 360 organization.
 
-Один файл, только стандартная библиотека (urllib, curses-подобный ANSI-рендер).
-Токены и параметры берутся из .env (или окружения), значения НИКОГДА не
-печатаются целиком — только маска вида y0_…abc.
+Single file, standard library only (urllib, curses-like ANSI rendering).
+Tokens and parameters come from .env (or the environment); values are NEVER
+printed in full — only masked like y0_…abc.
 
-Переменные .env (обязательные):
-  Y360_ORG_ID          — числовой id организации
-  Y360_OAUTH_TOKEN     — OAuth-токен для api360.yandex.net (v1) и cloud-api (v2)
-  Y360_SCIM_TOKEN      — Bearer y0_... для SCIM
-  Y360_SCIM_DOMAIN_ID  — domain_id: хост https://{domain_id}.scim-api.passport.yandex.net
-Опционально:
-  Y360_V1_TOKEN / Y360_V2_TOKEN — отдельные токены, если не один на всё
-  Y360_TIMEOUT (сек., по умолч. 30)
+.env variables (required):
+  Y360_ORG_ID          — numeric organization id
+  Y360_OAUTH_TOKEN     — OAuth token for api360.yandex.net (v1) and cloud-api (v2)
+  Y360_SCIM_TOKEN      — Bearer y0_... for SCIM
+  Y360_SCIM_DOMAIN_ID  — domain_id: host https://{domain_id}.scim-api.passport.yandex.net
+Optional:
+  Y360_V1_TOKEN / Y360_V2_TOKEN — separate tokens if not a single one for everything
+  Y360_TIMEOUT (seconds, default 30)
 
-Режимы:
-  python3 y360_tui.py                 — только чтение (GET); записи заблокированы
-  python3 y360_tui.py --write         — разрешает записи (каждый шаг с подтверждением)
-  python3 y360_tui.py --mock          — демо-данные, сеть не трогает (пощупать меню)
-  python3 y360_tui.py --check         — показать замаскированную конфигурацию и выйти
-  python3 y360_tui.py --selftest      — автотесты на моках, без TTY
+Modes:
+  python3 y360_tui.py                 — read-only (GET); writes are blocked
+  python3 y360_tui.py --write         — allow writes (every step asks for confirmation)
+  python3 y360_tui.py --mock          — demo data, network untouched (explore the menus)
+  python3 y360_tui.py --check         — print the masked configuration and exit
+  python3 y360_tui.py --selftest      — mock-based selftests, no TTY required
 
-Управление: стрелки/ j k, цифры 1-9 — быстрый выбор, Enter — открыть,
-Backspace или x — назад, q — выход.
+Controls: arrows / j k, digits 1-9 for quick selection, Enter to open,
+Backspace or x to go back, q to quit.
 """
 import json
 import os
@@ -38,8 +38,8 @@ REQUIRED = ["Y360_ORG_ID", "Y360_OAUTH_TOKEN", "Y360_SCIM_TOKEN",
             "Y360_SCIM_DOMAIN_ID"]
 OPTIONAL = ["Y360_V1_TOKEN", "Y360_V2_TOKEN", "Y360_TIMEOUT"]
 
-HOST_V1 = "https://api360.yandex.net"        # deprecated, но nickname только тут
-HOST_V2 = "https://cloud-api.yandex.net"     # актуальный
+HOST_V1 = "https://api360.yandex.net"        # deprecated, but nickname lives only here
+HOST_V2 = "https://cloud-api.yandex.net"     # current
 SCH = "OA" + "uth"
 BR = "Bea" + "rer"
 C_JSON = "application/json"
@@ -118,7 +118,7 @@ def _request(method, url, headers, body=None, allow=(200, 201, 204)):
 
 
 def api(kind, method, path, body=None, allow=(200, 201, 204)):
-    """kind: v1 | v2 | scim. В MOCK-режиме сеть не трогается."""
+    """kind: v1 | v2 | scim. In MOCK mode the network is not touched."""
     if MOCK:
         return mock_response(kind, method, path, body)
     if kind == "scim":
@@ -201,7 +201,7 @@ def first(dct, *keys, default=""):
     return default
 
 
-# ---------------------------------------------------------------- mock (канон «Ромашки»)
+# ---------------------------------------------------------------- mock data (canonical fictional "Romashka")
 MOCK_USERS = [
     {"id": 101, "userName": "ivanovii@romashka.ru", "name": {"last": "Иванов", "first": "Иван"}, "displayName": "Иванов Иван", "defaultEmail": "ivanov@romashka.ru", "nickname": "ivanov", "departmentId": 10},
     {"id": 102, "userName": "petrova@romashka.ru", "name": {"last": "Петрова", "first": "Анна"}, "displayName": "Петрова Анна", "defaultEmail": "petrova@romashka.ru", "nickname": "petrova", "emails": ["petrova@romashka.ru", "ivanovaim@romashka.ru"]},
@@ -278,7 +278,7 @@ def mock_response(kind, method, path, body):
     return {"ok": True, "method": method, "path": p, "echo": body}
 
 
-# ---------------------------------------------------------------- терминал
+# ---------------------------------------------------------------- terminal
 ESC = chr(27)
 DIM, BOLD, REV, RESET = ESC + "[2m", ESC + "[1m", ESC + "[7m", ESC + "[0m"
 
@@ -343,7 +343,7 @@ def render(title, lines, foot, state):
     sys.stdout.flush()
 
 
-# ---------------------------------------------------------------- хелперы отображения
+# ---------------------------------------------------------------- display helpers
 def cell(row, *keys, width=0):
     val = first(row, *keys)
     if isinstance(val, dict):
@@ -368,7 +368,7 @@ def kv_lines(dct, limit=40):
 
 
 def confirm(text):
-    """Возвращает True только на явную y/д. Без --write не вызывается."""
+    """Return True only on explicit y/д. Never called without --write."""
     if not WRITE:
         return False
     render("подтверждение", [text, "", "Действительно выполнить запись? (y/N)"],
@@ -378,7 +378,7 @@ def confirm(text):
 
 
 def show_paged(title, lines, allow_open=None):
-    """Прокрутка результата; allow_open — callable(index) для входа в запись."""
+    """Scroll through a result; allow_open is callable(index) to enter a write."""
     idx = 0
     foot = "стрелки/j k — листать | x/Backspace — назад | q — выход"
     while True:
@@ -409,7 +409,7 @@ def show_paged(title, lines, allow_open=None):
 
 
 def ask_line(prompt):
-    """Однострочный ввод без сырого терминала."""
+    """Single-line input without raw terminal mode."""
     cols, rows = term_size()
     buf = ""
     while True:
@@ -426,7 +426,7 @@ def ask_line(prompt):
             buf += key
 
 
-# ---------------------------------------------------------------- общее: выбор организации
+# ---------------------------------------------------------------- common: organization overview
 def org_summary():
     lines = []
     try:
@@ -444,7 +444,7 @@ def org_summary():
     return lines
 
 
-# ---------------------------------------------------------------- 1. Пользователи
+# ---------------------------------------------------------------- 1. Users
 def user_card(uid, src="v2"):
     lines = []
     try:
@@ -574,9 +574,9 @@ def scim_by_id():
         show_paged("SCIM %s" % uid, ["ошибка: %s" % err])
 
 
-# ----------------------------- служебное: обёртка записи (write_guard)
+# ----------------------------- internal: write wrapper (write_guard)
 def write_guard(desc, fn, skip_dry=False):
-    """Единая точка записи: без --write показывает только предпросмотр."""
+    """Single write entry point: without --write only a preview is shown."""
     if not WRITE:
         return "[read-only] шаг пропущен: %s (запусти с --write)" % desc
     if not confirm(desc):
@@ -589,7 +589,7 @@ def write_guard(desc, fn, skip_dry=False):
         return "[ОШИБКА] %s: %s" % (desc, str(err)[:200])
 
 
-# ---------------------------------------------------------------- 2. Отделы и группы
+# ---------------------------------------------------------------- 2. Departments and groups
 def menu_dirs():
     while True:
         act = menu("2. Отделы и группы",
@@ -646,7 +646,7 @@ def group_members():
     show_paged("группа %s" % gid, lines)
 
 
-# ---------------------------------------------------------------- 3. Почта и домены
+# ---------------------------------------------------------------- 3. Mail and domains
 def menu_mail():
     while True:
         act = menu("3. Почта и домены",
@@ -755,7 +755,7 @@ def aliases_menu():
 
 
 
-# ---------------------------------------------------------------- 4. Аудит и статистика
+# ---------------------------------------------------------------- 4. Audit and statistics
 def menu_audit():
     while True:
         act = menu("4. Аудит и статистика",
@@ -797,7 +797,7 @@ def org_stats_view():
         show_paged("статистика", ["ошибка: %s" % err])
 
 
-# ---------------------------------------------------------------- 5. Утилиты / диагностика
+# ---------------------------------------------------------------- 5. Utilities / diagnostics
 def menu_util():
     while True:
         act = menu("5. Утилиты и диагностика",
@@ -868,9 +868,9 @@ def probe_hosts():
     show_paged("доступность", lines)
 
 
-# ---------------------------------------------------------------- main / цикл
+# ---------------------------------------------------------------- main / loop
 def menu(title, entries, state=""):
-    """Одноуровневое меню: стрелки/цифры. Возвращает выбранное действие или None."""
+    """Single-level menu: arrows/digits. Returns the chosen action or None."""
     idx = 0
     while True:
         cols, rows = term_size()

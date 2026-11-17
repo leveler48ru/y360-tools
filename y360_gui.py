@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 r"""
-y360_gui.py — графический интерфейс (Windows/Linux/macOS) для управления
-организацией Яндекс 360. Tkinter — стандартная библиотека Python, на Windows
-ничего доустанавливать не нужно (python.org-сборка включает Tcl/Tk).
+y360_gui.py — graphical interface (Windows/Linux/macOS) for managing a
+Yandex 360 organization. Tkinter is part of the Python standard library;
+on Windows nothing extra is needed (the python.org build includes Tcl/Tk).
 
-Запуск:
-  python y360_gui.py            — чтение .env рядом со скриптом, read-only
-  python y360_gui.py --mock     — демо-данные «Ромашки», сеть не трогается
+Usage:
+  python y360_gui.py            — read .env next to the script, read-only
+  python y360_gui.py --mock     — demo data of the fictional "Romashka", network untouched
   python y360_gui.py --env C:\path\.env
-  python y360_gui.py --selftest-gui   — смоук-тест без показа окна (xvfb/headless)
+  python y360_gui.py --selftest-gui   — smoke test without showing a window (xvfb/headless)
 
-API-слой (env, маски, ретраи, мок-данные, эндпоинты) переиспользуется из
-y360_tui.py — оба файла должны лежать рядом. Записи по умолчанию запрещены;
-включаются чекбоксом «Режим записи» и на каждое действие спрашивают
-подтверждение. Значения токенов не показываются никогда — только маска.
+The API layer (env, masks, retries, mock data, endpoints) is reused from
+y360_tui.py — both files must sit side by side. Writes are disabled by
+default; enable them with the "Режим записи" (write mode) checkbox — every
+action then asks for confirmation. Token values are never shown, only masks.
 """
 import argparse
 import json
@@ -39,7 +39,7 @@ SERVICES = ["(все)", "Synchronization", "Directory", "Mail", "Disk",
             "Portal", "Calendar"]
 
 
-# ---------------------------------------------------------------- утилиты
+# ---------------------------------------------------------------- helpers
 def jdump(data):
     return json.dumps(data, ensure_ascii=False, indent=1, default=str)
 
@@ -48,7 +48,7 @@ def rows_of(data, *list_keys):
     return core.items_of(data, *list_keys) if isinstance(data, (dict, list)) else []
 
 
-# ---------------------------------------------------------------- приложение
+# ---------------------------------------------------------------- application
 class App:
     def __init__(self, root, mock=False, env_file=None):
         self.root = root
@@ -78,7 +78,7 @@ class App:
         core.WRITE = False
         self.poll()
 
-    # -- меню/статус
+    # -- menu/status
     def build_menu(self):
         menubar = tk.Menu(self.root)
         m_file = tk.Menu(menubar, tearoff=0)
@@ -140,10 +140,10 @@ class App:
     def status(self, text):
         self.status_lbl.config(text=text[:160])
 
-    # -- фоновые вызовы API
+    # -- background API calls
     def call(self, kind, method, path, body=None, done=None,
              allow=(200, 201, 204), what=None):
-        """Неблокирующий запрос; результат придёт в очередь и в done(data)."""
+        """Non-blocking request; the result arrives via the queue and done(data)."""
         self.busy_count += 1
         self.busy_lbl.config(text="запрос: %s" % (what or path[:60]))
 
@@ -178,7 +178,7 @@ class App:
         self.root.after(120, self.poll)
 
     def guard_write(self, desc, fn):
-        """Запись только в write-режиме и с явным подтверждением."""
+        """Writes only in write mode and with explicit confirmation."""
         if not self.write_mode.get():
             messagebox.showinfo(
                 "Read-only",
@@ -193,7 +193,7 @@ class App:
         return True
 
 
-# ---------------------------------------------------------------- базовый таб
+# ---------------------------------------------------------------- base tab
 class Tab(ttk.Frame):
     def __init__(self, app):
         super().__init__(app.nb)
@@ -217,7 +217,7 @@ class Tab(ttk.Frame):
 
 
 def run_bg(app, fn, done, what):
-    """Произвольная синхронная функция (серия запросов) в фоновом потоке."""
+    """Run an arbitrary synchronous function (a series of requests) in a background thread."""
     app.busy_count += 1
     app.busy_lbl.config(text=what[:60])
 
@@ -232,7 +232,7 @@ def run_bg(app, fn, done, what):
     threading.Thread(target=worker, daemon=True).start()
 
 
-# ================================================================ ПОЛЬЗОВАТЕЛИ
+# ================================================================ USERS
 class UsersTab(Tab):
     def __init__(self, app):
         super().__init__(app)
@@ -350,9 +350,9 @@ class UsersTab(Tab):
             what="статистика пользователей")
 
 
-# ================================================================ ОТДЕЛЫ/ГРУППЫ
+# ================================================================ DEPARTMENTS/GROUPS
 class DirsTab(Tab):
-    """Универсальная вкладка: выпадающий список эндпоинтов + кнопка."""
+    """Generic tab: endpoint dropdown + button."""
     ENDPOINTS = [
         ("отделы (v2)", "v2", "/v1/directory/organizations/%s/departments"),
         ("отделы (v1 api360)", "v1", "/directory/v1/org/%s/departments"),
@@ -402,7 +402,7 @@ class DirsTab(Tab):
                       what="состав группы %s" % gid)
 
 
-# ================================================================ ПОЧТА
+# ================================================================ MAIL
 class MailTab(Tab):
     def __init__(self, app):
         super().__init__(app)
@@ -509,7 +509,7 @@ class MailTab(Tab):
                       what="алиасы %s" % uid)
 
 
-# ================================================================ АУДИТ
+# ================================================================ AUDIT
 class AuditTab(Tab):
     def __init__(self, app):
         super().__init__(app)
@@ -590,7 +590,7 @@ class AuditTab(Tab):
                       what="статистика организации")
 
 
-# ================================================================ УТИЛИТЫ
+# ================================================================ UTILITIES
 class UtilTab(Tab):
     def __init__(self, app):
         super().__init__(app)
@@ -656,28 +656,28 @@ class UtilTab(Tab):
 
 # ================================================================ main
 def selftest_gui():
-    """Смоук без показа окна: собираем App и проверяем ключевые пути."""
+    """Smoke test without showing a window: build App and exercise the key paths."""
     import tempfile
     core.MOCK = True
     core.ENV.update({"Y360_ORG_ID": "1000",
                      "Y360_SCIM_DOMAIN_ID": "1234567"})
-    # для env-ключей с токенами значения ставим только в памяти процесса
+    # token-bearing env keys get values only in process memory
     core.ENV["Y360_OAUTH_TOKEN"] = "test-oauth-0123456789"
     core.ENV["Y360_SCIM_TOKEN"] = "y0_test-scim-0123456789"
     root = tk.Tk()
     root.withdraw()
     app = App(root, mock=True)
     ok = []
-    # 1. моковые данные пользователей грузятся синхронно (MOCK — сеть молчит)
+    # 1. mock user data loads synchronously (MOCK — the network stays silent)
     users = core.fetch_users_v2()
     ok.append(("fetch_users_v2 mock: %d" % len(users), len(users) >= 4))
-    # 2. запись заблокирована без --write
+    # 2. writes are blocked without --write
     guard = core.write_guard("самопроверка read-only", lambda: None)
     ok.append(("read-only guard", "read-only" in guard))
-    # 3. маскировка
+    # 3. masking
     ok.append(("mask не печатает токен",
                "test-oauth" not in core.mask(core.ENV["Y360_OAUTH_TOKEN"])))
-    # 4. вкладки созданы
+    # 4. tabs are created
     ok.append(("все вкладки на месте",
                all(t is not None for t in (app.tab_users,
                                            app.tab_dirs, app.tab_mail,

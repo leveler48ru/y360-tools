@@ -1,45 +1,48 @@
-# y360-tools — инструменты администратора Яндекс 360
+# y360-tools — Yandex 360 administrator tools
 
-Набор скриптов на чистом Python 3 (только стандартная библиотека) для управления
-организацией в Яндекс 360 через REST API (Каталог, Почта, Аудит)
-и SCIM.
+A set of pure Python 3 scripts (standard library only) for managing a
+Yandex 360 organization via REST API (Directory, Mail, Audit) and SCIM.
 
-## Состав
+## Contents
 
-| Файл | Что делает |
+| File | Purpose |
 |---|---|
-| `y360_tui.py` | Псевдографическая консоль (ANSI-терминал): пользователи, отделы, группы, почта, аудит-лог |
-| `y360_gui.py` | То же в GUI (Tkinter, Windows/Linux/macOS). API-слой переиспользуется из `y360_tui.py` — оба файла должны лежать рядом |
-| `y360.env.example` | Шаблон конфигурации |
+| `y360_tui.py` | Text-mode console (ANSI terminal): users, departments, groups, mail, audit log |
+| `y360_gui.py` | The same functionality as a GUI (Tkinter, Windows/Linux/macOS). The API layer is reused from `y360_tui.py` — both files must sit side by side |
+| `y360.env.example` | Configuration template |
 
-## Настройка
-
-```bash
-cp y360.env.example .env   # и заполнить значения
-```
-
-- `Y360_ORG_ID` — числовой id организации
-- `Y360_OAUTH_TOKEN` — OAuth-токен приложения с правами на Каталог/Почту
-- `Y360_SCIM_TOKEN` — Bearer-токен SCIM-коннектора (вид `y0_...`)
-- `Y360_SCIM_DOMAIN_ID` — domain_id для хоста `https://{domain_id}.scim-api.passport.yandex.net`
-- опционально: `Y360_V1_TOKEN` / `Y360_V2_TOKEN` (разные токены для v1/v2), `Y360_TIMEOUT`
-
-Токены читаются только из окружения/`.env`, на экран и в логи выводятся только
-маской вида `y0_…abc`. `.env` в репозиторий не попадает.
-
-## Запуск
+## Setup
 
 ```bash
-python3 y360_tui.py --mock      # демо-данные вымышленной организации, сеть не трогается
-python3 y360_tui.py --check     # показать замаскированную конфигурацию
-python3 y360_tui.py             # read-only: только GET, записи заблокированы
-python3 y360_tui.py --write     # разрешить записи (каждый шаг с подтверждением)
-python3 y360_tui.py --selftest  # автотесты на моках, без TTY
-
-python y360_gui.py --mock       # GUI с демо-данными (Windows: python.org-сборка уже включает Tcl/Tk)
+cp y360.env.example .env   # then fill in the values
 ```
 
-Управление в TUI: стрелки / `j` `k`, цифры 1–9 — быстрый выбор, Enter — открыть,
-Backspace или `x` — назад, `q` — выход.
+- `Y360_ORG_ID` — numeric organization id
+- `Y360_OAUTH_TOKEN` — OAuth token of an application with Directory/Mail permissions
+- `Y360_SCIM_TOKEN` — SCIM connector Bearer token (`y0_...` format)
+- `Y360_SCIM_DOMAIN_ID` — domain_id for the host `https://{domain_id}.scim-api.passport.yandex.net`
+- optional: `Y360_V1_TOKEN` / `Y360_V2_TOKEN` (separate tokens for v1/v2), `Y360_TIMEOUT`
 
-Требуется Python 3.8+. Зависимостей нет.
+Tokens are read only from the environment / `.env`; on screen and in logs
+they appear only in masked form like `y0_…abc`. `.env` never gets committed
+to the repository.
+
+## Usage
+
+```bash
+python3 y360_tui.py --mock      # demo data of a fictional organization, no network access
+python3 y360_tui.py --check     # print the masked configuration
+python3 y360_tui.py             # read-only: GET only, writes are blocked
+python3 y360_tui.py --write     # allow writes (every step asks for confirmation)
+python3 y360_tui.py --selftest  # mock-based selftests, no TTY required
+
+python y360_gui.py --mock       # GUI with demo data (Windows: the python.org build already includes Tcl/Tk)
+```
+
+TUI controls: arrow keys / `j` `k`, digits 1–9 for quick selection,
+Enter to open, Backspace or `x` to go back, `q` to quit.
+
+Requires Python 3.8+. No third-party dependencies.
+
+Note: the user interface itself (menus, prompts, dialogs) is in Russian;
+this README and all code comments are in English.
